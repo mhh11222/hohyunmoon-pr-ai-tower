@@ -5,7 +5,8 @@ import { buildField, buildGrid, buildPareto, buildTower } from "./field.js";
 import { buildAxisLabels } from "./axislabels.js";
 import { decodeSequence } from "./decode.js";
 import { scrollProgress } from "./scroll.js";
-import { createSound } from "./sound.js";
+import { createAudio } from "./audio.js";
+import { createVisualizer } from "./visualizer.js";
 
 const REDUCED =
   typeof matchMedia === "function" &&
@@ -80,12 +81,21 @@ function setupCursor() {
 }
 
 // ---------------------------------------------------------------------------
-// Sound toggle
+// AETHER audio player + audio-reactive visualizer (bottom-right dock)
+//   - never autoplays (created/resumed on a user gesture inside createAudio)
+//   - reduced-motion → visualizer draws a single calm baseline (no rAF)
 // ---------------------------------------------------------------------------
-createSound({
-  button: document.getElementById("sound-toggle"),
-  icon: document.getElementById("sound-ico"),
-  label: document.getElementById("sound-label"),
+const audio = createAudio({
+  playBtn: document.getElementById("audio-play"),
+  stopBtn: document.getElementById("audio-stop"),
+  muteBtn: document.getElementById("audio-mute"),
+  volSlider: document.getElementById("audio-vol"),
+  statusEl: document.getElementById("audio-status"),
+});
+createVisualizer({
+  canvas: document.getElementById("viz"),
+  audio,
+  reduced: REDUCED,
 });
 
 // ---------------------------------------------------------------------------
@@ -186,6 +196,11 @@ function runThree() {
     // ONE focal motion: a very slow whole-field rotation (H1 — Object3D, so the
     // tower group rotates with it and stays on the champion). Low amplitude.
     world.rotation.z = Math.sin(t * 0.05) * 0.06;
+
+    // OPTIONAL: feed audio energy into the field as a SUBTLE breathing dolly.
+    // Pure camera micro-move — cannot touch/break the shader. Idles at 3.6.
+    const energy = audio.getEnergy ? audio.getEnergy() : 0;
+    camera.position.z = 3.6 - energy * 0.12;
 
     renderer.render(scene, camera);
     requestAnimationFrame(loop);

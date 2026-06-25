@@ -155,46 +155,170 @@ body {
   color: var(--mute);
 }
 
-.sound {
-  position: fixed;
-  top: 28px;
-  right: 36px;
-  z-index: 5;
-  font: 700 var(--t-hud) "JetBrains Mono", monospace;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--mute);
-  background: transparent;
-  border: 1px solid rgba(138, 160, 168, 0.4);
-  border-radius: 4px;
-  padding: 6px 12px;
-  cursor: pointer;
-  pointer-events: auto;
-  transition: color 0.25s var(--ease-out), border-color 0.25s var(--ease-out);
-}
-.sound:hover {
-  color: var(--aurora);
-  border-color: var(--aurora);
-}
-.sound[aria-pressed="true"] {
-  color: var(--aurora);
-  border-color: var(--aurora);
-}
-.sound .ico {
-  display: inline-block;
-  margin-right: 6px;
-}
-
 .scrollhint {
   position: fixed;
   bottom: 30px;
-  right: 40px;
+  left: 36px; /* DESIGN.md: 좌하단 스크롤 힌트 (bottom-LEFT) */
   z-index: 4;
   font-size: var(--t-hud);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--mute);
   pointer-events: none;
+}
+
+/* ============================================================
+   AETHER transport dock — bottom-right, instrument aesthetic
+   thin corner-bracket frame, surface panel, cyan accents
+   ============================================================ */
+.audiodock {
+  position: fixed;
+  right: 36px;
+  bottom: 28px;
+  z-index: 5;
+  pointer-events: auto;
+}
+.audiodock-frame {
+  position: relative;
+  background: rgba(6, 10, 15, 0.72); /* --surface w/ alpha */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(138, 160, 168, 0.22);
+  border-radius: 4px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* thin corner brackets framing the dock (top-left + bottom-right) */
+.audiodock-frame::before,
+.audiodock-frame::after {
+  content: "";
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--aurora);
+  opacity: 0.5;
+  pointer-events: none;
+}
+.audiodock-frame::before {
+  top: -1px;
+  left: -1px;
+  border-right: 0;
+  border-bottom: 0;
+}
+.audiodock-frame::after {
+  bottom: -1px;
+  right: -1px;
+  border-left: 0;
+  border-top: 0;
+}
+.audiodock-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.viz {
+  width: 96px;
+  height: 28px;
+  display: block;
+}
+.audiodock-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+.audiodock-title {
+  font: 700 var(--t-hud) "JetBrains Mono", monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--aurora);
+}
+.audiodock-status {
+  font: 400 0.66rem "JetBrains Mono", monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mute);
+}
+.audiodock-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.abtn {
+  min-width: 40px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 400 0.95rem "JetBrains Mono", monospace;
+  color: var(--mute);
+  background: transparent;
+  border: 1px solid rgba(138, 160, 168, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.2s var(--ease-out), border-color 0.2s var(--ease-out),
+    background 0.2s var(--ease-out);
+}
+.abtn:hover {
+  color: var(--aurora);
+  border-color: var(--aurora);
+}
+.abtn[aria-pressed="true"] {
+  color: var(--aurora);
+  border-color: var(--aurora);
+  background: rgba(94, 234, 255, 0.08);
+}
+/* mute, when active, reads thermal (state = "off/cut") */
+#audio-mute[aria-pressed="true"] {
+  color: var(--thermal);
+  border-color: var(--thermal);
+  background: rgba(255, 106, 61, 0.08);
+}
+.abtn:focus-visible,
+.vol-slider:focus-visible {
+  outline: 2px solid var(--aurora);
+  outline-offset: 2px;
+}
+
+/* volume slider — styled to the instrument */
+.vol {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+}
+.vol-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 72px;
+  height: 3px;
+  background: rgba(138, 160, 168, 0.3);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--aurora);
+  border: 0;
+  box-shadow: 0 0 6px rgba(94, 234, 255, 0.5);
+}
+.vol-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--aurora);
+  box-shadow: 0 0 6px rgba(94, 234, 255, 0.5);
+}
+.vol-slider::-moz-range-track {
+  height: 3px;
+  background: rgba(138, 160, 168, 0.3);
+  border-radius: 2px;
 }
 
 /* ============================================================
@@ -373,5 +497,19 @@ body {
     left: 5vw;
     right: 5vw;
     max-width: none;
+  }
+}
+
+/* narrow viewports: keep the dock from crowding the title / clipping off-screen */
+@media (max-width: 560px) {
+  .audiodock {
+    right: 12px;
+    bottom: 12px;
+  }
+  .audiodock-meta {
+    display: none; /* drop the text label, keep meter + transport */
+  }
+  .viz {
+    width: 64px;
   }
 }

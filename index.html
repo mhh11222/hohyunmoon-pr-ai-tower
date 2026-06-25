@@ -34,18 +34,48 @@
       <div class="decode" data-decode="GEN —— · FITNESS —— · CHAMP ——" id="telemetry-line"></div>
     </div>
 
-    <!-- top-right sound toggle -->
-    <button
-      class="sound"
-      id="sound-toggle"
-      type="button"
-      aria-pressed="false"
-      aria-label="Toggle ambient sound"
-    >
-      <span class="ico" id="sound-ico">◐</span><span id="sound-label">SOUND OFF</span>
-    </button>
-
     <div class="scrollhint" aria-hidden="true">objective-space · live</div>
+
+    <!-- bottom-right AETHER transport dock + audio-reactive meter -->
+    <section class="audiodock" aria-label="Ambient music player">
+      <div class="audiodock-frame">
+        <div class="audiodock-row">
+          <canvas
+            class="viz"
+            id="viz"
+            width="96"
+            height="28"
+            aria-hidden="true"
+          ></canvas>
+          <div class="audiodock-meta">
+            <span class="audiodock-title">AETHER</span>
+            <span class="audiodock-status" id="audio-status">READY</span>
+          </div>
+        </div>
+        <div class="audiodock-controls">
+          <button class="abtn" id="audio-play" type="button" aria-pressed="false" aria-label="Play ambient music">
+            <span class="glyph" aria-hidden="true">▶</span>
+          </button>
+          <button class="abtn" id="audio-stop" type="button" aria-label="Stop and reset">
+            <span class="glyph" aria-hidden="true">■</span>
+          </button>
+          <button class="abtn" id="audio-mute" type="button" aria-pressed="false" aria-label="Mute">
+            <span class="glyph" aria-hidden="true">♪</span>
+          </button>
+          <label class="vol" aria-label="Volume">
+            <input
+              class="vol-slider"
+              id="audio-vol"
+              type="range"
+              min="0"
+              max="100"
+              value="45"
+              aria-label="Volume"
+            />
+          </label>
+        </div>
+      </div>
+    </section>
 
     <!-- cursor instruments (desktop only) -->
     <div class="reticle" id="reticle"><span class="ring"></span></div>
