@@ -157,8 +157,11 @@ body {
 
 .scrollhint {
   position: fixed;
-  bottom: 30px;
-  left: 36px; /* DESIGN.md: 좌하단 스크롤 힌트 (bottom-LEFT) */
+  /* DESIGN.md: 좌하단 스크롤 힌트 (bottom-LEFT). Lifted clear of the
+     y-axis tick column (left ~30px) and the x-axis tick band (bottom ~30px)
+     so the instrument labels and the hint don't collide. */
+  bottom: 58px;
+  left: 56px;
   z-index: 4;
   font-size: var(--t-hud);
   letter-spacing: 0.18em;
