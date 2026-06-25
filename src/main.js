@@ -3,7 +3,8 @@ import evo from "../data/evo.js"; // C1/C2: inline ESM data, no fetch()
 import { championOf, easeOut } from "./ga.js";
 import {
   buildField,
-  buildGrid,
+  buildSurface,
+  buildAxes,
   buildPareto,
   buildTower,
   updatePareto,
@@ -175,19 +176,40 @@ function runThree() {
   renderer.setClearColor(0x000000, 0); // keep CSS gradient visible if alpha
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 100);
-  camera.position.set(0, 0, 3.6);
+  const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 100);
 
-  // a rotatable wrapper so the field AND tower rotate by the SAME amount (H1)
-  const world = new THREE.Group();
-  scene.add(world);
+  // ---- 3/4 ISOMETRIC-ISH RIG (matches the reference) ----------------------
+  // The landscape is modelled in the XY plane with +Z = fitness (up). We tilt a
+  // pivot so +Z reads as "up the screen" and view it from a 3/4 angle. A slow
+  // ambient orbit + scroll-driven dolly live on this rig — never a full spin.
+  const rig = new THREE.Group(); // yaw (ambient orbit + scroll)
+  const tilt = new THREE.Group(); // fixed lookdown tilt
+  const world = new THREE.Group(); // holds the landscape, centered
+  rig.add(tilt);
+  tilt.add(world);
+  scene.add(rig);
 
-  const grid = buildGrid();
+  // tip the plane back so we look DOWN onto the surface at a 3/4 angle.
+  // ~55° from horizontal reads like the reference iso plot.
+  tilt.rotation.x = -Math.PI * 0.30;
+  // baseline 3/4 yaw so peaks + valleys don't line up flat
+  const BASE_YAW = -0.62;
+  rig.rotation.z = BASE_YAW;
+  const CAM_Z = 4.9; // pulled back so the whole surface frames in
+  camera.position.set(0, 0, CAM_Z);
+  camera.lookAt(0, 0, 0);
+
+  const surface = buildSurface();
+  const axes = buildAxes();
   const field = buildField(generation);
   const pareto = buildPareto(generation);
   const tower = buildTower(generation);
 
-  world.add(grid);
+  // lower the landscape so the surface sits in the centre/lower frame, leaving
+  // headroom for the floating × and the title block in the lower-left.
+  world.position.set(0, -0.15, -0.4);
+  world.add(surface);
+  world.add(axes);
   world.add(field);
   if (pareto) world.add(pareto);
   world.add(tower);
@@ -212,6 +234,7 @@ function runThree() {
 
   const fieldU = field.material.uniforms;
   const paretoMat = pareto ? pareto.material : null;
+  const surfaceMat = surface.userData.fillMat || null;
   const pulseMats = tower.userData.pulseMats || [];
   const handoffMats = tower.userData.handoffMats || [];
 
@@ -225,9 +248,10 @@ function runThree() {
     fieldU.uMorph.value = 1;
     fieldU.uTime.value = 0;
     if (paretoMat) paretoMat.uniforms.uTime.value = 0;
+    if (surfaceMat) surfaceMat.uniforms.uTime.value = 0;
     pulseMats.forEach((m) => (m.uniforms.uTime.value = 0));
+    // static converged frame: no orbit, no generation loop, fixed 3/4 angle.
     renderer.render(scene, camera);
-    // still respond to resize (re-render once)
     addEventListener("resize", () => renderer.render(scene, camera));
     return;
   }
@@ -333,17 +357,19 @@ function runThree() {
 
     // pulses
     if (paretoMat) paretoMat.uniforms.uTime.value = t;
+    if (surfaceMat) surfaceMat.uniforms.uTime.value = t;
     pulseMats.forEach((m) => (m.uniforms.uTime.value = t));
 
-    // ambient: a very slow whole-field rotation (H1 — Object3D, so the tower
-    // group rotates with it and stays on the champion). LOW amplitude so the
-    // generational "breath" stays the one focal motion (DESIGN motion system).
-    world.rotation.z = Math.sin(t * 0.05) * 0.04;
+    // ambient camera: slow LOW-amplitude orbit (drift, NOT a full spin) around
+    // the landscape. Scroll maps to a gentle additional orbit + dolly-in (the
+    // reference 3/4 angle is the home pose). DESIGN: one focal motion = the
+    // generational breath; the orbit stays subtle.
+    const scroll = scrollProgress();
+    rig.rotation.z = BASE_YAW + Math.sin(t * 0.045) * 0.06 + scroll * 0.5;
 
-    // OPTIONAL: feed audio energy into the field as a SUBTLE breathing dolly.
-    // Pure camera micro-move — cannot touch/break the shader. Idles at 3.6.
+    // SUBTLE dolly: audio energy + scroll pull the camera gently in.
     const energy = audio.getEnergy ? audio.getEnergy() : 0;
-    camera.position.z = 3.6 - energy * 0.12;
+    camera.position.z = CAM_Z - energy * 0.12 - scroll * 0.5;
 
     renderer.render(scene, camera);
     requestAnimationFrame(loop);
