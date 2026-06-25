@@ -97,6 +97,7 @@ const SURF_FRAG = /* glsl */ `
   varying float vHeight;
   varying vec3 vNormal;
   uniform float uTime;
+  uniform float uReveal; // 0..1 portal hand-off fade-in (1 = fully present)
   void main() {
     // directional key light from the upper-front so the 3D form reads even with
     // additive particles on top. Normals are in view space.
@@ -115,7 +116,7 @@ const SURF_FRAG = /* glsl */ `
     float heat = smoothstep(0.62, 1.0, vHeight) * (0.5 + 0.5 * sin(uTime * 0.8));
 
     vec3 col = vColor * light + band + heat * vec3(0.22, 0.06, 0.0);
-    gl_FragColor = vec4(col, 1.0);
+    gl_FragColor = vec4(col, uReveal);
   }
 `;
 
@@ -146,8 +147,10 @@ export function buildSurface() {
   const fillMat = new THREE.ShaderMaterial({
     vertexShader: SURF_VERT,
     fragmentShader: SURF_FRAG,
-    uniforms: { uTime: { value: 0 } },
-    transparent: false,
+    uniforms: { uTime: { value: 0 }, uReveal: { value: 1 } },
+    // transparent so the portal can fade the surface in on hand-off; with the
+    // default uReveal=1 it renders fully opaque exactly as before.
+    transparent: true,
     depthWrite: true,
   });
   const fill = new THREE.Mesh(geo, fillMat);
