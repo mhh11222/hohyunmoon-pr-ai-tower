@@ -16,29 +16,28 @@ export function buildAxisLabels(container) {
     color: "rgba(94,234,255,0.55)",
   });
 
-  // x-axis title (bottom-centre)
-  const xTitle = label("OBJ-X  →  COST", { left: "50%", bottom: "14px", transform: "translateX(-50%)" });
-  // y-axis title (left, rotated)
-  const yTitle = label("OBJ-Y  →  LATENCY", {
-    left: "14px",
-    top: "50%",
+  // 3D fitness-landscape axis titles: two objective axes on the floor + the
+  // FITNESS↑ riser. Positioned to frame the iso surface, not re-projected/frame.
+  const xTitle = label("OBJ-X →", { left: "62%", bottom: "20px", transform: "translateX(-50%)" });
+  const yTitle = label("← OBJ-Y", { left: "22%", bottom: "40px", transform: "translateX(-50%)" });
+  // vertical fitness axis (left riser), rotated
+  const zTitle = label("FITNESS ↑", {
+    left: "16px",
+    top: "44%",
     transform: "translateY(-50%) rotate(-90deg)",
     transformOrigin: "left center",
   });
 
-  // tick value labels along the bottom and left
-  const ticksX = document.createElement("div");
-  const ticksY = document.createElement("div");
-  const vals = ["0.0", "0.2", "0.4", "0.6", "0.8", "1.0"];
+  // faint fitness tick values up the left riser
+  const ticksZ = document.createElement("div");
+  const vals = ["0.0", "0.5", "1.0"];
   vals.forEach((v, i) => {
-    const fx = 0.08 + (i / (vals.length - 1)) * 0.84; // span ~middle of viewport
-    const tx = label(v, { left: fx * 100 + "%", bottom: "30px", transform: "translateX(-50%)", opacity: "0.5" });
-    ticksX.appendChild(tx);
-    const ty = label(v, { left: "30px", top: (1 - fx) * 100 + "%", transform: "translateY(-50%)", opacity: "0.5" });
-    ticksY.appendChild(ty);
+    const fy = 0.3 + (i / (vals.length - 1)) * 0.4;
+    const tz = label(v, { left: "34px", top: (1 - fy) * 100 + "%", transform: "translateY(-50%)", opacity: "0.45" });
+    ticksZ.appendChild(tz);
   });
 
-  wrap.append(xTitle, yTitle, ticksX, ticksY);
+  wrap.append(xTitle, yTitle, zTitle, ticksZ);
   container.appendChild(wrap);
   return wrap;
 }
