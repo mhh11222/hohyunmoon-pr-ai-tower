@@ -350,23 +350,62 @@ body {
   color: var(--bone);
 }
 .titleblock .person {
+  margin-top: 8px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+.titleblock .person-en {
   font-family: "Space Grotesk", sans-serif;
   font-weight: 500;
   font-size: var(--t-h2);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   color: var(--bone);
-  margin-top: 8px;
+}
+.titleblock .person-ko {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 500;
+  font-size: clamp(0.95rem, 2vw, 1.2rem);
+  letter-spacing: 0.04em;
+  color: var(--mute);
 }
 .titleblock .tagline {
   font-family: "JetBrains Mono", monospace;
   font-size: var(--t-body);
   letter-spacing: 0.02em;
-  color: var(--mute);
   margin-top: 14px;
   line-height: 1.5;
 }
 .titleblock .tagline .en {
+  display: block;
   color: var(--aurora);
+}
+.titleblock .tagline .ko {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.82em;
+  color: var(--mute);
+}
+/* hero statement: English primary, Korean sub, capped measure */
+.titleblock .herostatement {
+  font-family: "JetBrains Mono", monospace;
+  font-size: clamp(0.82rem, 1.05vw, 0.95rem);
+  line-height: 1.55;
+  max-width: 58ch;
+  margin-top: 16px;
+}
+.titleblock .herostatement .en {
+  display: block;
+  color: var(--bone);
+  opacity: 0.86;
+}
+.titleblock .herostatement .ko {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.86em;
+  line-height: 1.6;
+  color: var(--mute);
 }
 .titleblock .contact {
   font-family: "JetBrains Mono", monospace;
@@ -374,6 +413,7 @@ body {
   letter-spacing: 0.04em;
   color: var(--mute);
   margin-top: 16px;
+  overflow-wrap: anywhere;
 }
 .titleblock .contact a {
   color: var(--aurora);
