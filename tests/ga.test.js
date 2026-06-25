@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { genomeToParticle, paretoFront, championOf } from "../src/ga.js";
+import {
+  genomeToParticle,
+  paretoFront,
+  championOf,
+  lerp,
+  easeOut,
+  lerpParticle,
+} from "../src/ga.js";
+import evo from "../data/evo.js";
 
 const gen = {
   generation: 3,
@@ -54,5 +62,87 @@ describe("championOf", () => {
 
   it("returns null for an empty generation", () => {
     expect(championOf({ genomes: [] })).toBe(null);
+  });
+});
+
+// --- P2: interpolation helpers (pure) ---
+describe("lerp / easeOut", () => {
+  it("lerp hits both endpoints and the midpoint", () => {
+    expect(lerp(0, 10, 0)).toBe(0);
+    expect(lerp(0, 10, 1)).toBe(10);
+    expect(lerp(2, 6, 0.5)).toBe(4);
+  });
+
+  it("easeOut is clamped to 0..1 and monotonic", () => {
+    expect(easeOut(0)).toBe(0);
+    expect(easeOut(1)).toBe(1);
+    expect(easeOut(-1)).toBe(0); // clamped low
+    expect(easeOut(2)).toBe(1); // clamped high
+    expect(easeOut(0.5)).toBeGreaterThan(0.5); // ease-OUT front-loads
+  });
+});
+
+describe("lerpParticle", () => {
+  const a = genomeToParticle({ obj: [0, 0], fitness: 0.2, dominated: false });
+  const b = genomeToParticle({ obj: [1, 1], fitness: 0.8, dominated: false });
+
+  it("returns the start particle at t=0", () => {
+    const p = lerpParticle(a, b, 0);
+    expect(p.x).toBeCloseTo(a.x);
+    expect(p.brightness).toBeCloseTo(a.brightness);
+  });
+
+  it("returns the end particle at t=1", () => {
+    const p = lerpParticle(a, b, 1);
+    expect(p.x).toBeCloseTo(b.x);
+    expect(p.size).toBeCloseTo(b.size);
+  });
+
+  it("interpolates x/y/z/size/brightness at the midpoint", () => {
+    const p = lerpParticle(a, b, 0.5);
+    expect(p.x).toBeCloseTo((a.x + b.x) / 2);
+    expect(p.y).toBeCloseTo((a.y + b.y) / 2);
+    expect(p.z).toBeCloseTo((a.z + b.z) / 2);
+    expect(p.size).toBeCloseTo((a.size + b.size) / 2);
+    expect(p.brightness).toBeCloseTo((a.brightness + b.brightness) / 2);
+  });
+});
+
+// --- P2: synthetic timeline shape ---
+describe("evo timeline (synthetic multi-generation data)", () => {
+  it("has a healthy number of generations (~14-18)", () => {
+    expect(evo.generations.length).toBeGreaterThanOrEqual(14);
+    expect(evo.generations.length).toBeLessThanOrEqual(18);
+  });
+
+  it("best fitness is non-decreasing and climbs ~0.55 → ~0.97", () => {
+    const bests = evo.generations.map((g) => championOf(g).fitness);
+    for (let i = 1; i < bests.length; i++) {
+      expect(bests[i]).toBeGreaterThanOrEqual(bests[i - 1] - 1e-6);
+    }
+    expect(bests[0]).toBeLessThan(0.6);
+    expect(bests[bests.length - 1]).toBeGreaterThan(0.9);
+  });
+
+  it("the champion changes a few times across the run (not every step)", () => {
+    let prev = null;
+    let changes = 0;
+    for (const g of evo.generations) {
+      const c = championOf(g);
+      if (prev && (Math.abs(c.obj[0] - prev.obj[0]) > 0.01 || Math.abs(c.obj[1] - prev.obj[1]) > 0.01)) {
+        changes++;
+      }
+      prev = c;
+    }
+    expect(changes).toBeGreaterThanOrEqual(2);
+    expect(changes).toBeLessThanOrEqual(6);
+  });
+
+  it("every generation has a non-empty Pareto front and a constant population", () => {
+    const pop = evo.generations[0].genomes.length;
+    for (const g of evo.generations) {
+      expect(g.genomes.length).toBe(pop);
+      expect(paretoFront(g).length).toBeGreaterThanOrEqual(2);
+    }
   });
 });
