@@ -1,0 +1,12 @@
+{
+  "name": "moon-ai-tower",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "python3 -m http.server 8080"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.0"
+  }
+}
