@@ -503,6 +503,14 @@ body {
   }
 }
 
+/* narrow viewports: the dock claims the very bottom band, so lift the title
+   block above it to prevent the dock overlapping the contact line. */
+@media (max-width: 560px) {
+  .titleblock {
+    bottom: 124px; /* clear the ~98px dock band + gap */
+  }
+}
+
 /* narrow viewports: keep the dock from crowding the title / clipping off-screen */
 @media (max-width: 560px) {
   .audiodock {
