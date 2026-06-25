@@ -1,9 +1,17 @@
 import * as THREE from "three";
 import evo from "../data/evo.js"; // C1/C2: inline ESM data, no fetch()
-import { championOf } from "./ga.js";
-import { buildField, buildGrid, buildPareto, buildTower } from "./field.js";
+import { championOf, easeOut } from "./ga.js";
+import {
+  buildField,
+  buildGrid,
+  buildPareto,
+  buildTower,
+  updatePareto,
+  moveTower,
+  settleTower,
+} from "./field.js";
 import { buildAxisLabels } from "./axislabels.js";
-import { decodeSequence } from "./decode.js";
+import { decodeSequence, decodeElement } from "./decode.js";
 import { scrollProgress } from "./scroll.js";
 import { createAudio } from "./audio.js";
 import { createVisualizer } from "./visualizer.js";
@@ -16,29 +24,68 @@ const TOUCH =
   typeof matchMedia === "function" &&
   matchMedia("(hover: none), (pointer: coarse)").matches;
 
-const generation = evo.generations[0];
+// reduced-motion → show the FINAL (converged) generation statically; otherwise
+// start at generation 0 and play forward.
+const GEN_COUNT = evo.generations.length;
+const startIndex = REDUCED ? GEN_COUNT - 1 : 0;
+const generation = evo.generations[startIndex];
 const canvas = document.getElementById("bg");
 
 // ---------------------------------------------------------------------------
 // Telemetry HUD text (from data) + machine-decode intro
 // ---------------------------------------------------------------------------
+// short, stable champion label (the synthetic ids are long e.g. "g15-25")
+function champLabel(champ) {
+  if (!champ) return "—";
+  const m = String(champ.id).match(/(\d+)\D*$/);
+  return m ? m[1].padStart(3, "0") : String(champ.id);
+}
+
+function telemetryLine(gen, fitness, champ) {
+  return `GEN ${String(gen).padStart(3, "0")} · FITNESS ${fitness.toFixed(2)} · CHAMP #${champLabel(champ)}`;
+}
+
+const telEl = document.getElementById("telemetry-line");
+
 function setupTelemetry() {
   const champ = championOf(generation);
-  const gen = String(evo.meta?.generation ?? generation.generation).padStart(3, "0");
-  const fit = (champ?.fitness ?? 0).toFixed(2);
-  const line =
-    `GEN ${gen} · FITNESS ${fit} · CHAMP #${champ?.id ?? "—"}`;
-  const tel = document.getElementById("telemetry-line");
-  tel.setAttribute("data-decode", line);
-  tel.textContent = line;
+  const fit = champ?.fitness ?? 0;
+  const line = telemetryLine(generation.generation, fit, champ);
+  telEl.setAttribute("data-decode", line);
+  telEl.textContent = line;
 
   // decode the title block + telemetry, staggered, once on load
-  const decodeEls = [
-    tel,
-    ...document.querySelectorAll(".titleblock .decode"),
-  ];
+  const decodeEls = [telEl, ...document.querySelectorAll(".titleblock .decode")];
   decodeSequence(decodeEls, { stagger: 120, duration: 650 });
-  return { fit: champ?.fitness ?? 0 };
+  return { fit };
+}
+
+/**
+ * Live HUD updater. GEN snaps to the new value, FITNESS counts up smoothly from
+ * the previous best to the new best over the step, CHAMP id flashes a quick
+ * decode when the champion changes.
+ */
+function makeHud(initialFit) {
+  let shownFit = initialFit;
+  let flashing = false; // a decode flash owns the element until it resolves
+  return {
+    update(gen, targetFit, champ, championChanged) {
+      // smooth count-up toward the new best fitness
+      shownFit += (targetFit - shownFit) * 0.18;
+      if (Math.abs(targetFit - shownFit) < 0.004) shownFit = targetFit;
+      const line = telemetryLine(gen, shownFit, champ);
+      if (championChanged && !flashing) {
+        // quick decode/typewriter flash on champion handoff (fires ONCE)
+        flashing = true;
+        telEl.setAttribute("data-decode", line);
+        decodeElement(telEl, line, { duration: 420 }).then(() => {
+          flashing = false;
+        });
+      } else if (!flashing) {
+        telEl.textContent = line;
+      }
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -161,13 +208,16 @@ function runThree() {
   const fieldU = field.material.uniforms;
   const paretoMat = pareto ? pareto.material : null;
   const pulseMats = tower.userData.pulseMats || [];
+  const handoffMats = tower.userData.handoffMats || [];
 
   const smoothMouse = new THREE.Vector2(99, 99);
   const t0 = performance.now();
 
-  // reduced-motion: render the final state once, frozen.
+  // reduced-motion: render the FINAL (converged) generation once, frozen.
+  // No generation loop, no morph, no handoff — HUD already shows final values.
   if (REDUCED) {
     fieldU.uIntroT.value = 1;
+    fieldU.uMorph.value = 1;
     fieldU.uTime.value = 0;
     if (paretoMat) paretoMat.uniforms.uTime.value = 0;
     pulseMats.forEach((m) => (m.uniforms.uTime.value = 0));
@@ -177,12 +227,99 @@ function runThree() {
     return;
   }
 
+  // -------------------------------------------------------------------------
+  // GENERATION PLAYBACK STATE MACHINE
+  //   - advance one generation every STEP_MS
+  //   - on advance: retarget field, recompute pareto, move tower
+  //   - field MORPHS (uMorph 0→1, eased ~MORPH_MS) — "breathing" lerp
+  //   - champion change → old explodes (uExplode 0→1) then new rushes in
+  //   - HUD: GEN snaps, FITNESS counts up, CHAMP flashes on change
+  //   - last gen → hold, then soft-reset (jump-cut) back to gen 0
+  // -------------------------------------------------------------------------
+  const STEP_MS = evo.meta?.stepMs ?? 2800;
+  const MORPH_MS = 1200; // field lerp duration (ease)
+  const EXPLODE_MS = 380; // old-champion blow-out
+  const INTRO_MS = 620; // new-champion rush-in
+  const HOLD_MS = 2600; // converged hold at the last generation
+
+  const hud = makeHud(championOf(generation)?.fitness ?? 0);
+
+  let genIndex = startIndex;
+  let lastStep = performance.now() + 900; // small delay so the rush-in lands first
+  let morphStart = -1; // timestamp morph began (-1 = idle)
+  // champion handoff sub-state: 'idle' | 'explode' | 'intro'
+  let handoff = "idle";
+  let handoffStart = 0;
+  let pendingChamp = null;
+
+  function advanceGeneration() {
+    const next = (genIndex + 1) % GEN_COUNT;
+    const looping = next === 0; // soft reset back to gen 0
+    genIndex = next;
+    const gen = evo.generations[genIndex];
+
+    // field morph + pareto recompute
+    field.userData.retarget(gen);
+    morphStart = performance.now();
+    updatePareto(pareto, gen);
+
+    // champion handoff
+    const { changed, champ } = moveTower(tower, gen);
+    if (changed && !looping) {
+      // old explodes, then new rushes in (design beat)
+      handoff = "explode";
+      handoffStart = performance.now();
+      pendingChamp = champ;
+    } else {
+      // no change (or loop reset) → just settle on the new champion
+      settleTower(tower, champ);
+      handoffMats.forEach((m) => (m.uniforms.uIntro.value = 1));
+    }
+  }
+
   function loop(now) {
     const t = (now - t0) / 1000;
 
     fieldU.uTime.value = t;
-    fieldU.uIntroT.value = Math.min(1, t / 1.4); // 1.4s rush-in
+    fieldU.uIntroT.value = Math.min(1, t / 1.4); // 1.4s rush-in (first paint)
     fieldU.uScroll.value = scrollProgress();
+
+    // ---- step timer ----
+    const atLast = genIndex === GEN_COUNT - 1;
+    const interval = atLast ? STEP_MS + HOLD_MS : STEP_MS;
+    if (now - lastStep >= interval) {
+      lastStep = now;
+      advanceGeneration();
+    }
+
+    // ---- field morph (eased lerp of particle positions/size/brightness) ----
+    if (morphStart >= 0) {
+      const mt = Math.min(1, (now - morphStart) / MORPH_MS);
+      fieldU.uMorph.value = easeOut(mt);
+      if (mt >= 1) morphStart = -1;
+    }
+
+    // ---- champion handoff beat ----
+    if (handoff === "explode") {
+      const et = Math.min(1, (now - handoffStart) / EXPLODE_MS);
+      handoffMats.forEach((m) => (m.uniforms.uExplode.value = et));
+      if (et >= 1) {
+        // relocate to new champion, then rush it in
+        settleTower(tower, pendingChamp);
+        handoffMats.forEach((m) => (m.uniforms.uIntro.value = 0));
+        handoff = "intro";
+        handoffStart = now;
+      }
+    } else if (handoff === "intro") {
+      const it = Math.min(1, (now - handoffStart) / INTRO_MS);
+      handoffMats.forEach((m) => (m.uniforms.uIntro.value = easeOut(it)));
+      if (it >= 1) handoff = "idle";
+    }
+
+    // ---- HUD: count FITNESS up, GEN snap, CHAMP flash on handoff ----
+    const gen = evo.generations[genIndex];
+    const champ = championOf(gen);
+    hud.update(gen.generation, champ?.fitness ?? 0, champ, handoff === "explode");
 
     // smooth cursor probe
     if (pointerActive && mouseObj.x < 90) smoothMouse.lerp(mouseObj, 0.12);
@@ -193,9 +330,10 @@ function runThree() {
     if (paretoMat) paretoMat.uniforms.uTime.value = t;
     pulseMats.forEach((m) => (m.uniforms.uTime.value = t));
 
-    // ONE focal motion: a very slow whole-field rotation (H1 — Object3D, so the
-    // tower group rotates with it and stays on the champion). Low amplitude.
-    world.rotation.z = Math.sin(t * 0.05) * 0.06;
+    // ambient: a very slow whole-field rotation (H1 — Object3D, so the tower
+    // group rotates with it and stays on the champion). LOW amplitude so the
+    // generational "breath" stays the one focal motion (DESIGN motion system).
+    world.rotation.z = Math.sin(t * 0.05) * 0.04;
 
     // OPTIONAL: feed audio energy into the field as a SUBTLE breathing dolly.
     // Pure camera micro-move — cannot touch/break the shader. Idles at 3.6.
