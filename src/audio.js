@@ -142,12 +142,13 @@ export function createAudio(opts = {}) {
   }
 
   // ---- transport ----------------------------------------------------------
+  // returns true if playback actually started (false = blocked / unavailable).
   async function play() {
-    if (!available) return;
+    if (!available) return false;
     if (!ensureGraph() || !audio) {
       available = false;
       syncUI();
-      return;
+      return false;
     }
     try {
       if (ctx && ctx.state === "suspended") await ctx.resume();
@@ -155,14 +156,17 @@ export function createAudio(opts = {}) {
       playing = true;
       save(KEY_STATE, "on");
       syncUI();
+      return true;
     } catch (_) {
       // autoplay blocked or file missing → stay paused, no crash
       playing = false;
       syncUI();
+      return false;
     }
   }
 
   function pause() {
+    disarmGesture(); // explicit pause cancels any pending autoplay-on-gesture
     if (audio) audio.pause();
     playing = false;
     save(KEY_STATE, "off");
@@ -175,6 +179,7 @@ export function createAudio(opts = {}) {
   }
 
   function stop() {
+    disarmGesture(); // explicit stop cancels any pending autoplay-on-gesture
     if (audio) {
       audio.pause();
       try {
@@ -189,6 +194,7 @@ export function createAudio(opts = {}) {
   function setMuted(next) {
     muted = !!next;
     save(KEY_MUTE, muted ? "1" : "0");
+    if (muted) disarmGesture(); // muting cancels a pending gesture autostart
     applyGain();
     syncUI();
   }
@@ -206,6 +212,44 @@ export function createAudio(opts = {}) {
     }
     applyGain();
     syncUI();
+  }
+
+  // ---- browser-honest autoplay --------------------------------------------
+  // Try to start on load; if the browser blocks autoplay-with-sound, arm a
+  // ONE-TIME first-gesture listener that starts the track. Skips entirely when
+  // skip() is true (mute flag set, or prefers-reduced-motion).
+  let gestureArmed = false;
+  let gestureHandler = null;
+  const GESTURES = ["pointerdown", "keydown", "wheel", "touchstart"];
+
+  function disarmGesture() {
+    if (!gestureArmed) return;
+    gestureArmed = false;
+    GESTURES.forEach((ev) => removeEventListener(ev, gestureHandler));
+    gestureHandler = null;
+  }
+
+  function armFirstGesture() {
+    if (gestureArmed) return;
+    gestureArmed = true;
+    gestureHandler = () => {
+      disarmGesture();
+      // muted in the meantime, or no longer wanted → don't force it
+      if (muted || playing || !available) return;
+      play();
+    };
+    GESTURES.forEach((ev) =>
+      addEventListener(ev, gestureHandler, { once: true, passive: true })
+    );
+  }
+
+  async function autostart({ skip = false } = {}) {
+    if (skip || muted || !available) {
+      syncUI();
+      return;
+    }
+    const started = await play(); // honest attempt — usually blocked on load
+    if (!started) armFirstGesture(); // fall back to first user gesture
   }
 
   // ---- analyser readouts for the visualizer -------------------------------
@@ -243,6 +287,7 @@ export function createAudio(opts = {}) {
     pause,
     toggle,
     stop,
+    autostart,
     setMuted,
     toggleMute,
     setVolume,

@@ -145,6 +145,11 @@ createVisualizer({
   reduced: REDUCED,
 });
 
+// Browser-honest autoplay: try to start on load; if blocked, the audio module
+// arms a one-time first-gesture listener. Skipped when reduced-motion is set
+// (the module also skips when the localStorage mute flag is on).
+audio.autostart({ skip: REDUCED });
+
 // ---------------------------------------------------------------------------
 // WebGL — guarded. On failure, hide canvas and leave CSS gradient + content.
 // ---------------------------------------------------------------------------
