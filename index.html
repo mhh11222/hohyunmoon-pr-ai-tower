@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MOON AI TOWER — 문호현</title>
+    <meta
+      name="description"
+      content="MOON AI TOWER — 문호현 · genetic-algorithm engineer. 살아있는 진화 엔진을 만듭니다."
+    />
+    <link rel="stylesheet" href="./styles/main.css" />
+    <link rel="preload" href="./fonts/SpaceGrotesk-700.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="./fonts/JetBrainsMono-400.woff2" as="font" type="font/woff2" crossorigin />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.184.0/build/three.module.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <!-- full-bleed WebGL instrument; CSS gradient behind it is the fallback -->
+    <canvas id="bg" aria-hidden="true"></canvas>
+
+    <!-- HUD corner brackets -->
+    <div class="bracket tl"></div>
+    <div class="bracket tr"></div>
+    <div class="bracket bl"></div>
+    <div class="bracket br"></div>
+
+    <!-- top-left telemetry readout (values injected from data/evo.js) -->
+    <div class="telemetry" aria-hidden="true">
+      <div class="decode" data-decode="GEN —— · FITNESS —— · CHAMP ——" id="telemetry-line"></div>
+    </div>
+
+    <!-- top-right sound toggle -->
+    <button
+      class="sound"
+      id="sound-toggle"
+      type="button"
+      aria-pressed="false"
+      aria-label="Toggle ambient sound"
+    >
+      <span class="ico" id="sound-ico">◐</span><span id="sound-label">SOUND OFF</span>
+    </button>
+
+    <div class="scrollhint" aria-hidden="true">objective-space · live</div>
+
+    <!-- cursor instruments (desktop only) -->
+    <div class="reticle" id="reticle"><span class="ring"></span></div>
+    <div class="coordreadout" id="coordreadout">obj[0.00, 0.00]</div>
+
+    <!-- content (C placement: lower-left) -->
+    <main class="hero">
+      <div class="titleblock">
+        <h1 class="name decode" data-decode="MOON AI TOWER">MOON AI TOWER</h1>
+        <p class="person decode" data-decode="문호현">문호현</p>
+        <p class="tagline">
+          <span class="en decode" data-decode="genetic-algorithm engineer">genetic-algorithm engineer</span><br />
+          <span class="decode" data-decode="살아있는 진화 엔진을 만듭니다">살아있는 진화 엔진을 만듭니다</span>
+        </p>
+        <p class="contact">
+          <a href="https://github.com/mhh11222" target="_blank" rel="noopener noreferrer"
+            >github.com/mhh11222</a
+          ><span class="sep">·</span
+          ><a href="mailto:door@smilewide.co.kr">door@smilewide.co.kr</a>
+        </p>
+      </div>
+    </main>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

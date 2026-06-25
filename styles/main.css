@@ -1,0 +1,377 @@
+/* ============================================================
+   MOON AI TOWER — P1 cinematic core
+   Design system per docs/DESIGN.md (A mission-control + C typography)
+   ============================================================ */
+
+/* ---- self-hosted OFL fonts (versions pinned via filename) ---- */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("../fonts/JetBrainsMono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("../fonts/JetBrainsMono-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url("../fonts/SpaceGrotesk-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("../fonts/SpaceGrotesk-700.woff2") format("woff2");
+}
+
+/* ---- tokens ---- */
+:root {
+  --ink: #000;
+  --surface: #060a0f;
+  --bone: #f4f3ee;
+  --mute: #8aa0a8;
+  --aurora: #5eeaff;
+  --aurora-dim: #2a7d8c;
+  --pareto: #38f27f;
+  --thermal: #ff6a3d;
+  --scrim: rgba(0, 0, 0, 0.55);
+
+  --t-hero: clamp(2.8rem, 8vw, 6.5rem);
+  --t-h2: clamp(1.6rem, 4vw, 2.6rem);
+  --t-body: clamp(1rem, 1.4vw, 1.15rem);
+  --t-hud: 0.8rem;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* {
+  margin: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--ink);
+  color: var(--bone);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  overflow-x: hidden;
+  /* WebGL-failure fallback lives behind the canvas: a readable cinematic
+     gradient so the page is never a blank black void. */
+  background-image:
+    radial-gradient(120% 80% at 62% 38%, rgba(94, 234, 255, 0.08), transparent 60%),
+    radial-gradient(90% 70% at 70% 70%, rgba(56, 242, 127, 0.05), transparent 55%),
+    radial-gradient(60% 60% at 46% 50%, rgba(255, 106, 61, 0.05), transparent 50%);
+}
+
+/* full-bleed fixed WebGL canvas */
+#bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+#bg.webgl-failed {
+  display: none;
+}
+
+/* content layer */
+.hero {
+  position: relative;
+  z-index: 1;
+  min-height: 100svh;
+  width: 100%;
+  pointer-events: none; /* let cursor reticle / canvas feel live; re-enable per element */
+}
+
+/* ============================================================
+   HUD — corner brackets + telemetry + sound toggle
+   ============================================================ */
+.bracket {
+  position: fixed;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--aurora);
+  opacity: 0.55;
+  z-index: 3;
+  pointer-events: none;
+}
+.bracket.tl {
+  top: 20px;
+  left: 20px;
+  border-right: 0;
+  border-bottom: 0;
+}
+.bracket.tr {
+  top: 20px;
+  right: 20px;
+  border-left: 0;
+  border-bottom: 0;
+}
+.bracket.bl {
+  bottom: 20px;
+  left: 20px;
+  border-right: 0;
+  border-top: 0;
+}
+.bracket.br {
+  bottom: 20px;
+  right: 20px;
+  border-left: 0;
+  border-top: 0;
+}
+
+.telemetry {
+  position: fixed;
+  top: 28px;
+  left: 36px;
+  z-index: 4;
+  font-size: var(--t-hud);
+  letter-spacing: 0.08em;
+  color: var(--aurora);
+  text-transform: uppercase;
+  line-height: 1.6;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.telemetry .n {
+  color: var(--thermal);
+}
+.telemetry .dim {
+  color: var(--mute);
+}
+
+.sound {
+  position: fixed;
+  top: 28px;
+  right: 36px;
+  z-index: 5;
+  font: 700 var(--t-hud) "JetBrains Mono", monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mute);
+  background: transparent;
+  border: 1px solid rgba(138, 160, 168, 0.4);
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 0.25s var(--ease-out), border-color 0.25s var(--ease-out);
+}
+.sound:hover {
+  color: var(--aurora);
+  border-color: var(--aurora);
+}
+.sound[aria-pressed="true"] {
+  color: var(--aurora);
+  border-color: var(--aurora);
+}
+.sound .ico {
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.scrollhint {
+  position: fixed;
+  bottom: 30px;
+  right: 40px;
+  z-index: 4;
+  font-size: var(--t-hud);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--mute);
+  pointer-events: none;
+}
+
+/* ============================================================
+   Title block (C placement: lower-left, scrim plate)
+   ============================================================ */
+.titleblock {
+  position: absolute;
+  left: 8vw;
+  bottom: 9vh;
+  z-index: 2;
+  max-width: min(720px, 84vw);
+  padding: 22px 26px;
+  background: var(--scrim);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-left: 2px solid var(--aurora);
+  border-radius: 2px;
+  pointer-events: auto;
+}
+.titleblock .name {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: var(--t-hero);
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+  color: var(--bone);
+}
+.titleblock .person {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 500;
+  font-size: var(--t-h2);
+  letter-spacing: 0.02em;
+  color: var(--bone);
+  margin-top: 8px;
+}
+.titleblock .tagline {
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--t-body);
+  letter-spacing: 0.02em;
+  color: var(--mute);
+  margin-top: 14px;
+  line-height: 1.5;
+}
+.titleblock .tagline .en {
+  color: var(--aurora);
+}
+.titleblock .contact {
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--t-hud);
+  letter-spacing: 0.04em;
+  color: var(--mute);
+  margin-top: 16px;
+}
+.titleblock .contact a {
+  color: var(--aurora);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(94, 234, 255, 0.35);
+}
+.titleblock .contact a:hover {
+  border-bottom-color: var(--aurora);
+}
+.titleblock .contact .sep {
+  color: var(--aurora-dim);
+  margin: 0 8px;
+}
+
+/* ============================================================
+   Cursor reticle + coordinate readout (desktop only)
+   ============================================================ */
+.reticle {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 6;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s var(--ease-out);
+  will-change: transform;
+}
+.reticle.live {
+  opacity: 0.9;
+}
+.reticle::before,
+.reticle::after {
+  content: "";
+  position: absolute;
+  background: var(--aurora);
+  opacity: 0.85;
+}
+.reticle::before {
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  margin-left: -0.5px;
+}
+.reticle::after {
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  margin-top: -0.5px;
+}
+.reticle .ring {
+  position: absolute;
+  inset: 8px;
+  border: 1px solid var(--aurora);
+  border-radius: 50%;
+  opacity: 0.6;
+  animation: scanpulse 2.4s var(--ease-out) infinite;
+}
+@keyframes scanpulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+.coordreadout {
+  position: fixed;
+  z-index: 6;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--aurora);
+  background: rgba(0, 0, 0, 0.5);
+  padding: 2px 6px;
+  border-radius: 3px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s var(--ease-out);
+  white-space: nowrap;
+  will-change: transform;
+}
+.coordreadout.live {
+  opacity: 0.9;
+}
+
+/* ============================================================
+   Machine decode/typewriter text
+   ============================================================ */
+.decode {
+  /* JS swaps glyphs; this just guarantees no layout shift on settle */
+  white-space: pre-wrap;
+}
+
+/* ============================================================
+   Reduced motion: freeze everything, show final state
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .reticle .ring {
+    animation: none;
+  }
+  .reticle {
+    opacity: 0; /* no cursor effect */
+  }
+}
+
+/* touch / no fine pointer: hide cursor instruments */
+@media (hover: none), (pointer: coarse) {
+  .reticle,
+  .coordreadout {
+    display: none;
+  }
+  .titleblock {
+    left: 5vw;
+    right: 5vw;
+    max-width: none;
+  }
+}
