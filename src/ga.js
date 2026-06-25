@@ -44,3 +44,40 @@ export function championOf(gen) {
     null
   );
 }
+
+// ---------------------------------------------------------------------------
+// P2 — pure interpolation helpers for live multi-generation playback.
+// Kept pure (no THREE, no DOM) so they unit-test cleanly.
+// ---------------------------------------------------------------------------
+
+/** Scalar lerp. t is NOT clamped (callers ease t into 0..1). */
+export function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+/**
+ * cubic ease-out (matches --ease-out feel) for generation transitions.
+ * @param {number} t 0..1
+ */
+export function easeOut(t) {
+  const c = Math.min(1, Math.max(0, t));
+  return 1 - Math.pow(1 - c, 3);
+}
+
+/**
+ * Interpolate one particle's visual props between two genome-derived particles.
+ * Reuse genomeToParticle to get endpoints, then lerp x/y/z/size/brightness.
+ * Pure: takes two particle objects (as produced by genomeToParticle) + t.
+ * @param {{x,y,z,size,brightness:number}} a start particle
+ * @param {{x,y,z,size,brightness:number}} b end particle
+ * @param {number} t 0..1 (pre-eased by caller, or raw — lerp is linear)
+ */
+export function lerpParticle(a, b, t) {
+  return {
+    x: lerp(a.x, b.x, t),
+    y: lerp(a.y, b.y, t),
+    z: lerp(a.z, b.z, t),
+    size: lerp(a.size, b.size, t),
+    brightness: lerp(a.brightness, b.brightness, t),
+  };
+}
