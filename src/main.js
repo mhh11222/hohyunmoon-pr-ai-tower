@@ -16,6 +16,7 @@ import { decodeSequence, decodeElement } from "./decode.js";
 import { scrollProgress } from "./scroll.js";
 import { createAudio } from "./audio.js";
 import { createVisualizer } from "./visualizer.js";
+import { createPortal } from "./portal.js";
 
 const REDUCED =
   typeof matchMedia === "function" &&
@@ -129,6 +130,114 @@ function setupCursor() {
 }
 
 // ---------------------------------------------------------------------------
+// FACE PORTAL DOM wiring — the entry affordance is keyboard/SR accessible.
+//   Entry gestures (any of): click the Enter button, click the canvas/portrait,
+//   press Enter/Space anywhere, or scroll. A separate "skip intro" jumps to
+//   STATE B with no motion. dismissPortalOverlay() fades the overlay + removes
+//   it from the a11y tree, then moves focus to the now-revealed title block.
+// ---------------------------------------------------------------------------
+const portalEl = document.getElementById("portal");
+const portalEnterBtn = document.getElementById("portal-enter");
+const portalSkipBtn = document.getElementById("portal-skip");
+document.body.classList.add("portal-active");
+
+// fade the portal COPY out the moment entry starts (the particle scatter is the
+// star of the transition); the STATE-B chrome (title block, HUD) stays hidden
+// via body.portal-active until the journey completes — see revealStateB().
+let copyFaded = false;
+function fadePortalCopy() {
+  if (copyFaded) return;
+  copyFaded = true;
+  if (portalEl) {
+    portalEl.classList.add("portal-gone");
+    portalEl.setAttribute("aria-hidden", "true");
+    setTimeout(() => {
+      portalEl.querySelectorAll("button").forEach((b) => (b.tabIndex = -1));
+    }, 650);
+  }
+}
+
+// reveal STATE B (title block + HUD) and move keyboard focus into it. Called at
+// hand-off (transition complete) or immediately for the no-motion paths.
+let stateBRevealed = false;
+function revealStateB() {
+  if (stateBRevealed) return;
+  stateBRevealed = true;
+  document.body.classList.remove("portal-active");
+  const focusTarget =
+    document.querySelector(".titleblock .contact a") ||
+    document.querySelector(".titleblock");
+  if (focusTarget) {
+    if (!focusTarget.hasAttribute("tabindex") && focusTarget.tagName !== "A") {
+      focusTarget.setAttribute("tabindex", "-1");
+    }
+    try {
+      focusTarget.focus({ preventScroll: true });
+    } catch (_) {}
+  }
+}
+
+// no-motion / fallback dismiss: fade the copy AND reveal STATE B at once.
+function dismissPortalOverlay() {
+  fadePortalCopy();
+  revealStateB();
+}
+
+// wire entry (enter) + skip (skip). Listeners are removed once entry fires so a
+// scroll deep in STATE B never re-triggers anything.
+function wirePortalEntry(enter, skip) {
+  let fired = false;
+  const fire = (fn) => () => {
+    if (fired) return;
+    fired = true;
+    cleanup();
+    fn();
+  };
+  const onEnter = fire(enter);
+  const onSkip = fire(skip);
+
+  function onKey(e) {
+    if (copyFaded) return; // entry already started
+    if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+      // let the actual buttons handle their own activation
+      if (e.target === portalEnterBtn || e.target === portalSkipBtn) return;
+      e.preventDefault();
+      onEnter();
+    }
+  }
+  function onScroll() {
+    if (scrollY > 4) onEnter();
+  }
+  function onCanvasClick() {
+    onEnter();
+  }
+
+  if (portalEnterBtn) portalEnterBtn.addEventListener("click", onEnter);
+  if (portalSkipBtn) portalSkipBtn.addEventListener("click", onSkip);
+  canvas.addEventListener("click", onCanvasClick);
+  addEventListener("keydown", onKey);
+  addEventListener("scroll", onScroll, { passive: true });
+
+  function cleanup() {
+    if (portalEnterBtn) portalEnterBtn.removeEventListener("click", onEnter);
+    if (portalSkipBtn) portalSkipBtn.removeEventListener("click", onSkip);
+    canvas.removeEventListener("click", onCanvasClick);
+    removeEventListener("keydown", onKey);
+    removeEventListener("scroll", onScroll);
+  }
+}
+
+// reduced-motion: the portal is a STATIC portrait/copy; the Enter + skip buttons
+// (and Enter/Space) simply dismiss the overlay with no zoom. `after` runs once.
+function wirePortalDismiss(after) {
+  const go = () => {
+    dismissPortalOverlay();
+    after();
+  };
+  wirePortalEntry(go, go);
+}
+
+// ---------------------------------------------------------------------------
 // AETHER audio player + audio-reactive visualizer (bottom-right dock)
 //   - never autoplays (created/resumed on a user gesture inside createAudio)
 //   - reduced-motion → visualizer draws a single calm baseline (no rAF)
@@ -166,7 +275,11 @@ setupCursor();
 
 if (!renderer) {
   canvas.classList.add("webgl-failed");
-  // page is fully usable: gradient + title + contact + HUD remain.
+  // No WebGL → no particle portrait. Dismiss the portal overlay so the static
+  // fallback page (gradient + title + contact + HUD) is immediately usable; the
+  // Enter/skip buttons + Enter key still work as a no-op dismiss.
+  wirePortalDismiss(() => {});
+  dismissPortalOverlay();
 } else {
   runThree();
 }
@@ -241,8 +354,9 @@ function runThree() {
   const smoothMouse = new THREE.Vector2(99, 99);
   const t0 = performance.now();
 
-  // reduced-motion: render the FINAL (converged) generation once, frozen.
-  // No generation loop, no morph, no handoff — HUD already shows final values.
+  // reduced-motion: NO portal zoom journey. Dismiss the portrait overlay and
+  // render the FINAL (converged) landscape once, frozen. The portal DOM offers
+  // a normal "Enter →" button that just removes the overlay (no motion).
   if (REDUCED) {
     fieldU.uIntroT.value = 1;
     fieldU.uMorph.value = 1;
@@ -253,6 +367,8 @@ function runThree() {
     // static converged frame: no orbit, no generation loop, fixed 3/4 angle.
     renderer.render(scene, camera);
     addEventListener("resize", () => renderer.render(scene, camera));
+    // a focusable Enter/skip button still dismisses the static portal overlay.
+    wirePortalDismiss(() => {}); // no transition, just hide the overlay
     return;
   }
 
@@ -280,6 +396,70 @@ function runThree() {
   let handoff = "idle";
   let handoffStart = 0;
   let pendingChamp = null;
+
+  // -------------------------------------------------------------------------
+  // FACE PORTAL (STATE A) gating. While the portrait is up, the landscape is
+  // held hidden (surface uReveal=0, particle rush-in frozen). The landscape's
+  // OWN intro begins only at hand-off, so the GA "rushes in" as the portrait
+  // scatters into it. `entered` flips true once we've landed in STATE B; until
+  // then the generation clock is paused so the visitor isn't dropped mid-run.
+  // -------------------------------------------------------------------------
+  let portal = null;
+  let portalPending = true; // true until the portrait loads (or fails) — hold STATE A
+  let entered = false; // true once in STATE B (landscape playing)
+  let landscapeT0 = 0; // performance.now() when the landscape intro begins
+
+  function beginLandscape() {
+    if (entered) return;
+    entered = true;
+    landscapeT0 = performance.now();
+    lastStep = landscapeT0 + 900; // first generation step lands after rush-in
+    revealStateB(); // bring in the title block + HUD now that we've landed
+  }
+
+  // hold the landscape hidden until the portal hands off (whole world group off
+  // so faint axes/pareto/tower don't bleed through the clean portrait scene)
+  function holdLandscapeHidden() {
+    fieldU.uIntroT.value = 0;
+    if (surfaceMat) surfaceMat.uniforms.uReveal.value = 0;
+    world.visible = false;
+  }
+
+  // create the portrait portal (skipped on reduced-motion via the early return
+  // above). If the image fails to load, we fall back to entering immediately.
+  holdLandscapeHidden();
+  createPortal({
+    scene,
+    camera,
+    src: "./assets/portrait.png",
+    touch: TOUCH,
+    onComplete: beginLandscape,
+  })
+    .then((p) => {
+      portal = p;
+      portalPending = false;
+      // any of: click the portrait/canvas, press Enter/Space, click the Enter
+      // button, scroll, or click skip → start the zoom-into-brain transition.
+      const enter = () => {
+        // the entry gesture also satisfies the audio first-gesture (BGM start)
+        if (!REDUCED && !audio.isMuted?.()) audio.play?.();
+        if (!portal.startTransition()) return;
+        fadePortalCopy(); // copy fades now; STATE-B chrome waits for hand-off
+      };
+      wirePortalEntry(enter, () => {
+        // skip = jump straight to STATE B with no scatter (not a trap)
+        if (portal.getState() === "portrait") {
+          portal.skipInstant(); // calls onComplete → beginLandscape → revealStateB
+          fadePortalCopy();
+        }
+      });
+    })
+    .catch((err) => {
+      console.warn("[moon-ai-tower] portrait portal unavailable, entering directly:", err);
+      portalPending = false;
+      dismissPortalOverlay();
+      beginLandscape();
+    });
 
   function advanceGeneration() {
     const next = (genIndex + 1) % GEN_COUNT;
@@ -310,8 +490,43 @@ function runThree() {
     const t = (now - t0) / 1000;
 
     fieldU.uTime.value = t;
-    fieldU.uIntroT.value = Math.min(1, t / 1.4); // 1.4s rush-in (first paint)
     fieldU.uScroll.value = scrollProgress();
+
+    // ---- FACE PORTAL: hold STATE B hidden until the portrait has loaded -----
+    if (portalPending) {
+      if (surfaceMat) surfaceMat.uniforms.uReveal.value = 0;
+      fieldU.uIntroT.value = 0;
+      rig.rotation.z = BASE_YAW;
+      renderer.render(scene, camera);
+      requestAnimationFrame(loop);
+      return;
+    }
+
+    // ---- FACE PORTAL: drive STATE A + the zoom-into-brain transition --------
+    if (portal && !portal.isDone()) {
+      const st = portal.update(now);
+      // landscape fades in (surface alpha + particle rush-in) as the portrait
+      // scatters. `st.landscape` is 0 during STATE A, ramps in mid-transition.
+      const rev = st.landscape || 0;
+      world.visible = rev > 0.001; // reveal the GA world as it pushes in
+      if (surfaceMat) surfaceMat.uniforms.uReveal.value = rev;
+      fieldU.uIntroT.value = rev; // the GA "rushes in" beneath the scatter
+      // keep the rest of the landscape paused (no generation clock yet)
+      if (paretoMat) paretoMat.uniforms.uTime.value = t;
+      if (surfaceMat) surfaceMat.uniforms.uTime.value = t;
+      pulseMats.forEach((m) => (m.uniforms.uTime.value = t));
+      rig.rotation.z = BASE_YAW + Math.sin(t * 0.045) * 0.06;
+      renderer.render(scene, camera);
+      requestAnimationFrame(loop);
+      return;
+    }
+
+    // ---- STATE B: normal landscape playback (portal done / never created) ---
+    if (!entered) beginLandscape();
+    world.visible = true;
+    if (surfaceMat) surfaceMat.uniforms.uReveal.value = 1;
+    const lt = (now - landscapeT0) / 1000;
+    fieldU.uIntroT.value = Math.min(1, lt / 1.4); // 1.4s rush-in at hand-off
 
     // ---- step timer ----
     const atLast = genIndex === GEN_COUNT - 1;
