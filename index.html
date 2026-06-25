@@ -23,6 +23,35 @@
     <!-- full-bleed WebGL instrument; CSS gradient behind it is the fallback -->
     <canvas id="bg" aria-hidden="true"></canvas>
 
+    <!-- ====================================================================
+         FACE PORTAL (STATE A) — particle portrait entry. Real headings +
+         a keyboard/screen-reader "Enter" control; the canvas is aria-hidden.
+         JS removes .portal-active once the visitor lands in the GA landscape.
+         ==================================================================== -->
+    <section class="portal" id="portal" aria-label="Enter the live genetic-algorithm hero">
+      <div class="portal-copy">
+        <p class="portal-kicker">MOON AI TOWER</p>
+        <h1 class="portal-name">
+          <span class="en">HOHYUN MOON</span>
+          <span class="ko" lang="ko">문호현</span>
+        </h1>
+        <p class="portal-tag">
+          <span class="en">Full-stack engineer · genetic-algorithm researcher</span>
+          <span class="ko" lang="ko">풀스택 엔지니어 · 유전 알고리즘 연구</span>
+        </p>
+        <button class="portal-enter" id="portal-enter" type="button">
+          <span class="cue" aria-hidden="true">▸</span>
+          <span class="label">CLICK TO ENTER</span>
+          <span class="ko" lang="ko" aria-hidden="true">· 클릭</span>
+        </button>
+        <p class="portal-skip">
+          <button class="portal-skiplink" id="portal-skip" type="button">
+            skip intro · 건너뛰기 →
+          </button>
+        </p>
+      </div>
+    </section>
+
     <!-- HUD corner brackets -->
     <div class="bracket tl"></div>
     <div class="bracket tr"></div>

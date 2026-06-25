@@ -511,6 +511,177 @@ body {
 }
 
 /* ============================================================
+   FACE PORTAL (STATE A) — particle-portrait entry overlay
+   The 3D particle portrait is drawn on the WebGL canvas; this layer is the
+   on-brand copy + the keyboard/SR-accessible "Enter" control sitting beside it.
+   ============================================================ */
+.portal {
+  position: fixed;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 0 8vw 12vh;
+  pointer-events: none; /* the whole canvas is clickable to enter; controls re-enable */
+  transition: opacity 0.6s var(--ease-out);
+}
+/* during STATE A the canvas itself is a giant "enter" affordance */
+body.portal-active #bg {
+  cursor: pointer;
+}
+/* once entered, the portal fades and is removed from the a11y tree */
+.portal.portal-gone {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.portal-copy {
+  max-width: min(640px, 86vw);
+  pointer-events: auto;
+}
+.portal-kicker {
+  font: 700 var(--t-hud) "JetBrains Mono", monospace;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--aurora);
+  opacity: 0.85;
+}
+.portal-name {
+  margin-top: 10px;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: clamp(2.2rem, 6vw, 4.6rem);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  color: var(--bone);
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+.portal-name .ko {
+  font-size: clamp(1rem, 2.4vw, 1.6rem);
+  font-weight: 500;
+  color: var(--mute);
+}
+.portal-tag {
+  margin-top: 12px;
+  font: 400 var(--t-body) "JetBrains Mono", monospace;
+}
+.portal-tag .en {
+  display: block;
+  color: var(--aurora);
+}
+.portal-tag .ko {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.82em;
+  color: var(--mute);
+}
+.portal-enter {
+  margin-top: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  font: 700 0.82rem "JetBrains Mono", monospace;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--bone);
+  background: rgba(6, 10, 15, 0.6);
+  border: 1px solid var(--aurora);
+  border-radius: 3px;
+  padding: 13px 22px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: color 0.2s var(--ease-out), background 0.2s var(--ease-out),
+    box-shadow 0.3s var(--ease-out);
+}
+.portal-enter:hover {
+  color: var(--ink);
+  background: var(--aurora);
+  box-shadow: 0 0 24px rgba(94, 234, 255, 0.45);
+}
+.portal-enter:focus-visible {
+  outline: 2px solid var(--aurora);
+  outline-offset: 3px;
+}
+.portal-enter .cue {
+  color: var(--aurora);
+  animation: portalpulse 1.8s var(--ease-out) infinite;
+}
+.portal-enter:hover .cue {
+  color: var(--ink);
+}
+.portal-enter .ko {
+  color: var(--mute);
+  font-weight: 400;
+}
+@keyframes portalpulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateX(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(3px);
+  }
+}
+.portal-skip {
+  margin-top: 14px;
+}
+.portal-skiplink {
+  font: 400 0.7rem "JetBrains Mono", monospace;
+  letter-spacing: 0.1em;
+  color: var(--mute);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  padding: 2px 0;
+  cursor: pointer;
+}
+.portal-skiplink:hover {
+  color: var(--aurora);
+  border-bottom-color: rgba(94, 234, 255, 0.4);
+}
+.portal-skiplink:focus-visible {
+  outline: 2px solid var(--aurora);
+  outline-offset: 2px;
+}
+
+/* STATE A: keep the STATE-B title block + HUD telemetry out of the way until
+   the visitor has entered, so the portrait scene reads clean. */
+body.portal-active .titleblock,
+body.portal-active .telemetry,
+body.portal-active .scrollhint,
+body.portal-active .axis-overlay {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s var(--ease-out);
+}
+
+/* reduced-motion: NO zoom journey. Show a calm static portal with a normal
+   "Enter →" button; the pulse stops. (JS also skips the scatter transition.) */
+@media (prefers-reduced-motion: reduce) {
+  .portal-enter .cue {
+    animation: none;
+    opacity: 0.8;
+  }
+  .portal {
+    transition: none;
+  }
+}
+
+/* mobile: portal copy claims the lower band; tap anywhere to enter */
+@media (max-width: 560px) {
+  .portal {
+    padding: 0 5vw 16vh;
+  }
+}
+
+/* ============================================================
    Machine decode/typewriter text
    ============================================================ */
 .decode {
