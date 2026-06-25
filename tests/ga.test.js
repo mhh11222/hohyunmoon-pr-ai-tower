@@ -7,6 +7,13 @@ import {
   easeOut,
   lerpParticle,
 } from "../src/ga.js";
+import {
+  fitnessAt,
+  globalOptimum,
+  objToWorld,
+  sampleSurface,
+  PEAKS,
+} from "../src/landscape.js";
 import evo from "../data/evo.js";
 
 const gen = {
@@ -105,6 +112,76 @@ describe("lerpParticle", () => {
     expect(p.z).toBeCloseTo((a.z + b.z) / 2);
     expect(p.size).toBeCloseTo((a.size + b.size) / 2);
     expect(p.brightness).toBeCloseTo((a.brightness + b.brightness) / 2);
+  });
+});
+
+// --- 3D fitness landscape (pure surface math) ---
+describe("fitnessAt / landscape", () => {
+  it("peaks higher than valleys (multi-modal surface)", () => {
+    const peak = fitnessAt(PEAKS[0].cx, PEAKS[0].cy);
+    const valley = fitnessAt(0.02, 0.02); // far corner from every peak
+    expect(peak).toBeGreaterThan(valley);
+    expect(valley).toBeLessThan(0.2);
+  });
+
+  it("the global optimum is the tallest peak, sampled at its own center", () => {
+    const opt = globalOptimum();
+    // it must out-rank every other peak's center
+    for (const p of PEAKS) {
+      expect(opt.z).toBeGreaterThanOrEqual(fitnessAt(p.cx, p.cy) - 1e-9);
+    }
+    // and be at PEAKS[0] (contract: index 0 is the global optimum)
+    expect(opt.x).toBeCloseTo(PEAKS[0].cx);
+    expect(opt.y).toBeCloseTo(PEAKS[0].cy);
+    expect(opt.z).toBeGreaterThan(0.9); // normalized ~1 at the global peak
+  });
+
+  it("global optimum sits near where the final champion converges", () => {
+    const opt = globalOptimum();
+    const finalChamp = championOf(evo.generations[evo.generations.length - 1]);
+    expect(Math.abs(opt.x - finalChamp.obj[0])).toBeLessThan(0.12);
+    expect(Math.abs(opt.y - finalChamp.obj[1])).toBeLessThan(0.12);
+  });
+
+  it("objToWorld maps 0..1 → -1..1", () => {
+    expect(objToWorld(0)).toBe(-1);
+    expect(objToWorld(1)).toBe(1);
+    expect(objToWorld(0.5)).toBe(0);
+  });
+});
+
+describe("sampleSurface", () => {
+  it("returns a coherent mesh: (subdiv+1)^2 verts, subdiv^2*6 indices", () => {
+    const s = sampleSurface({ subdiv: 8 });
+    const side = 9;
+    expect(s.positions.length).toBe(side * side * 3);
+    expect(s.heights.length).toBe(side * side);
+    expect(s.indices.length).toBe(8 * 8 * 6);
+  });
+
+  it("XY positions span the centered [-1,1] world; Z follows fitness*zScale", () => {
+    const zScale = 1.15;
+    const s = sampleSurface({ subdiv: 16, zScale });
+    const side = 17;
+    // corner vertex (0,0) → world (-1,-1)
+    expect(s.positions[0]).toBeCloseTo(-1);
+    expect(s.positions[1]).toBeCloseTo(-1);
+    // last vertex → world (1,1)
+    const last = side * side - 1;
+    expect(s.positions[last * 3]).toBeCloseTo(1);
+    expect(s.positions[last * 3 + 1]).toBeCloseTo(1);
+    // a vertex's Z equals its fitness * zScale
+    const v = 100;
+    expect(s.positions[v * 3 + 2]).toBeCloseTo(s.heights[v] * zScale);
+  });
+
+  it("indices reference only valid vertices", () => {
+    const s = sampleSurface({ subdiv: 4 });
+    const maxV = 5 * 5 - 1;
+    for (const idx of s.indices) {
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(idx).toBeLessThanOrEqual(maxV);
+    }
   });
 });
 
