@@ -8,7 +8,7 @@
 // Public API (createAudio):
 //   { getEnergy, getBins, isPlaying, isMuted, destroy }
 
-const SRC = "./assets/ambient.mp3";
+const SRC = "./assets/ambient.m4a";
 const KEY_VOL = "moon-ai-tower:vol";
 const KEY_MUTE = "moon-ai-tower:mute";
 const KEY_STATE = "moon-ai-tower:sound"; // legacy key kept compatible
