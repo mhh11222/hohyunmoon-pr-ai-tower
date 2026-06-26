@@ -412,7 +412,7 @@ function runThree() {
     e.stopPropagation();
     panel.show(hit.object.userData.project, document.documentElement.lang || "en");
     focus.active = true;
-    focus.mesh = hit.object;
+    focus.mesh = hit.object.userData.node; // fly to the node's visual center
     returning = false;
     nodeTip.hide();
   });
@@ -672,11 +672,11 @@ function runThree() {
     if (!TOUCH && nodesInteractive() && !focus.active) {
       raycaster.setFromCamera(pointerNDC, camera);
       const hit = raycaster.intersectObjects(projectMeshes, false)[0];
-      const next = hit ? hit.object : null;
+      const next = hit ? hit.object.userData.node : null;
       if (next !== hovered) {
         if (hovered) hovered.scale.setScalar(1);
         hovered = next;
-        if (hovered) hovered.scale.setScalar(1.6);
+        if (hovered) hovered.scale.setScalar(1.5);
         document.body.classList.toggle("node-hover", !!hovered);
         nodeTip.show(hovered ? hovered.userData.project.name : null);
       }
