@@ -880,3 +880,71 @@ body.node-hover #bg {
     bottom: 116px;
   }
 }
+
+/* ===================================================================
+   I18N — EN/KO toggle. Show only the active language; both get full
+   parity (titleblock AND portal promoted; decode re-run by main.js).
+   =================================================================== */
+body[data-lang="en"] .ko {
+  display: none !important;
+}
+body[data-lang="ko"] .en {
+  display: none !important;
+}
+
+/* when KO is active, promote KO from "sub" styling to primary role so the
+   Korean visitor doesn't get a tiny muted hero (plan review T7). */
+body[data-lang="ko"] .titleblock .tagline .ko,
+body[data-lang="ko"] .titleblock .herostatement .ko {
+  color: var(--bone);
+  font-size: 1em;
+  opacity: 0.92;
+}
+body[data-lang="ko"] .titleblock .person-ko {
+  color: var(--bone);
+  font-size: var(--t-h2);
+}
+body[data-lang="ko"] .portal-name .ko {
+  color: var(--bone);
+  font-size: clamp(2rem, 6vw, 4rem);
+}
+body[data-lang="ko"] .portal-tag .ko {
+  color: var(--aurora);
+  font-size: 1em;
+}
+
+.lang-toggle {
+  position: fixed;
+  top: 18px;
+  right: 52px; /* clear of the .bracket.tr corner mark */
+  z-index: 30;
+  display: inline-flex;
+  gap: 2px;
+  font: 700 0.7rem "JetBrains Mono", monospace;
+  letter-spacing: 0.08em;
+}
+.lang-toggle button {
+  background: rgba(6, 10, 15, 0.6);
+  color: var(--mute);
+  border: 1px solid rgba(94, 234, 255, 0.25);
+  padding: 5px 9px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: color 0.18s var(--ease-out), border-color 0.18s var(--ease-out),
+    background 0.18s var(--ease-out);
+}
+/* active state: quiet outline/tint to match the rest of the HUD (design review
+   — cyan reserved for emphasis, not solid fills) */
+.lang-toggle button[aria-pressed="true"] {
+  color: var(--aurora);
+  background: rgba(94, 234, 255, 0.1);
+  border-color: var(--aurora);
+}
+.lang-toggle button:hover {
+  color: var(--bone);
+}
+.lang-toggle button:focus-visible {
+  outline: 2px solid var(--aurora);
+  outline-offset: 2px;
+}

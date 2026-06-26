@@ -8,6 +8,46 @@
       name="description"
       content="Hohyun Moon (문호현). Full-stack engineer and genetic-algorithm researcher. Builds agentic AI systems with multi-objective evolutionary search, RAG over pgvector, and GLSL. The hero is a live WebGL render of the search: objective-space scatter, Pareto front, champion tower."
     />
+
+    <!-- ===== SEO / share. When moving to a custom domain, replace the base
+         URL in the 4 absolute URLs below (canonical, og:url, og:image,
+         twitter:image, JSON-LD url) and add a CNAME file. ===== -->
+    <link rel="canonical" href="https://mhh11222.github.io/hohyunmoon-pr-ai-tower/" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="author" content="Hohyun Moon" />
+    <meta name="robots" content="index, follow" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Hohyun Moon — Full-stack engineer & genetic-algorithm researcher" />
+    <meta
+      property="og:description"
+      content="A live WebGL render of a genetic algorithm evolving in objective space. I build agentic AI systems where strategy evolves."
+    />
+    <meta property="og:url" content="https://mhh11222.github.io/hohyunmoon-pr-ai-tower/" />
+    <meta property="og:image" content="https://mhh11222.github.io/hohyunmoon-pr-ai-tower/assets/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Hohyun Moon — Full-stack engineer & genetic-algorithm researcher" />
+    <meta
+      name="twitter:description"
+      content="A live WebGL render of a genetic algorithm evolving in objective space."
+    />
+    <meta name="twitter:image" content="https://mhh11222.github.io/hohyunmoon-pr-ai-tower/assets/og.jpg" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Person",
+        "name": "Hohyun Moon",
+        "alternateName": "문호현",
+        "jobTitle": "Full-stack engineer & genetic-algorithm researcher",
+        "url": "https://mhh11222.github.io/hohyunmoon-pr-ai-tower/",
+        "sameAs": ["https://github.com/mhh11222"]
+      }
+    </script>
+
     <link rel="stylesheet" href="./styles/main.css" />
     <link rel="preload" href="./fonts/SpaceGrotesk-700.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="./fonts/JetBrainsMono-400.woff2" as="font" type="font/woff2" crossorigin />
@@ -19,7 +59,7 @@
       }
     </script>
   </head>
-  <body>
+  <body data-lang="en">
     <!-- full-bleed WebGL instrument; CSS gradient behind it is the fallback -->
     <canvas id="bg" aria-hidden="true"></canvas>
 
@@ -57,6 +97,12 @@
     <div class="bracket tr"></div>
     <div class="bracket bl"></div>
     <div class="bracket br"></div>
+
+    <!-- language toggle (top-right, clear of the corner bracket) -->
+    <div class="lang-toggle" role="group" aria-label="Language">
+      <button type="button" data-lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="ko" lang="ko" aria-pressed="false">한</button>
+    </div>
 
     <!-- top-left telemetry readout (values injected from data/evo.js) -->
     <div class="telemetry" aria-hidden="true">
@@ -128,8 +174,8 @@
       <div class="titleblock">
         <h1 class="name decode" data-decode="MOON AI TOWER">MOON AI TOWER</h1>
         <p class="person">
-          <span class="person-en decode" data-decode="HOHYUN MOON">HOHYUN MOON</span>
-          <span class="person-ko" lang="ko">문호현</span>
+          <span class="person-en en decode" data-decode="HOHYUN MOON">HOHYUN MOON</span>
+          <span class="person-ko ko decode" lang="ko" data-decode="문호현">문호현</span>
         </p>
         <p class="tagline">
           <span class="en decode" data-decode="Full-stack engineer · genetic-algorithm researcher"

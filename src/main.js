@@ -20,6 +20,7 @@ import { createPortal } from "./portal.js";
 import projects from "../data/projects.js";
 import { buildProjectNodes } from "./nodes.js";
 import { setupProjectPanel, setupNodeTip, renderProjectsMirror } from "./projectui.js";
+import { detectLang, applyLang } from "./i18n.js";
 
 const REDUCED =
   typeof matchMedia === "function" &&
@@ -60,9 +61,17 @@ function setupTelemetry() {
   telEl.textContent = line;
 
   // decode the title block + telemetry, staggered, once on load
-  const decodeEls = [telEl, ...document.querySelectorAll(".titleblock .decode")];
-  decodeSequence(decodeEls, { stagger: 120, duration: 650 });
+  decodeTitle();
   return { fit };
+}
+
+// Decode the telemetry + the *visible* title decode elements, so the active
+// language gets the machine-decode beat (KO parity — re-run on toggle).
+function decodeTitle() {
+  const els = [telEl, ...document.querySelectorAll(".titleblock .decode")].filter(
+    (el) => el === telEl || el.offsetParent !== null,
+  );
+  decodeSequence(els, { stagger: 120, duration: 650 });
 }
 
 /**
@@ -273,11 +282,34 @@ try {
   console.warn("[moon-ai-tower] WebGL unavailable, using CSS fallback:", err);
 }
 
+// ---- i18n: detect + apply BEFORE decode/telemetry so the correct language is
+// visible when the intro decode runs. Toggle re-applies + re-runs the beat. ----
+const langToggle = document.querySelector(".lang-toggle");
+function syncLangButtons(lang) {
+  if (!langToggle) return;
+  langToggle.querySelectorAll("button").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.lang === lang)),
+  );
+}
+function setLang(lang) {
+  applyLang(lang, {});
+  syncLangButtons(lang);
+  // crawlable + screen-reader project mirror (single source: data/projects.js),
+  // rendered regardless of WebGL so search engines / assistive tech get real text.
+  renderProjectsMirror(projects, lang);
+}
+setLang(detectLang(navigator, localStorage));
+if (langToggle) {
+  langToggle.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-lang]");
+    if (!btn) return;
+    setLang(btn.dataset.lang);
+    decodeTitle(); // re-run the machine-decode beat on the now-visible language
+  });
+}
+
 setupTelemetry();
 setupCursor();
-// crawlable + screen-reader project mirror (single source: data/projects.js).
-// Rendered regardless of WebGL so search engines / assistive tech get real text.
-renderProjectsMirror(projects, document.documentElement.lang || "en");
 
 if (!renderer) {
   canvas.classList.add("webgl-failed");
