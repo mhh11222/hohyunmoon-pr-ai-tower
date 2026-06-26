@@ -17,6 +17,9 @@ import { scrollProgress } from "./scroll.js";
 import { createAudio } from "./audio.js";
 import { createVisualizer } from "./visualizer.js";
 import { createPortal } from "./portal.js";
+import projects from "../data/projects.js";
+import { buildProjectNodes } from "./nodes.js";
+import { setupProjectPanel, setupNodeTip, renderProjectsMirror } from "./projectui.js";
 
 const REDUCED =
   typeof matchMedia === "function" &&
@@ -272,6 +275,9 @@ try {
 
 setupTelemetry();
 setupCursor();
+// crawlable + screen-reader project mirror (single source: data/projects.js).
+// Rendered regardless of WebGL so search engines / assistive tech get real text.
+renderProjectsMirror(projects, document.documentElement.lang || "en");
 
 if (!renderer) {
   canvas.classList.add("webgl-failed");
@@ -326,6 +332,61 @@ function runThree() {
   world.add(field);
   if (pareto) world.add(pareto);
   world.add(tower);
+
+  // ---- PROJECT NODES: curated thermal markers floating over the landscape ---
+  // Added to `world` so they inherit the rig/tilt transform and hide with the
+  // world during the portal. Pure placement lives in nodes.js (tested).
+  const { group: projectGroup, meshes: projectMeshes } = buildProjectNodes(THREE, projects);
+  world.add(projectGroup);
+
+  const raycaster = new THREE.Raycaster();
+  const pointerNDC = new THREE.Vector2(-2, -2); // offscreen until the mouse moves
+  let hovered = null;
+  const focus = { active: false, mesh: null }; // fly-to target
+  let returning = false;
+  const _wp = new THREE.Vector3();
+  const _dest = new THREE.Vector3();
+  const HOME = new THREE.Vector3(0, 0, CAM_Z);
+
+  const nodeTip = setupNodeTip();
+  const panel = setupProjectPanel(() => {
+    // closing the panel flies the camera home and resumes the ambient orbit
+    focus.active = false;
+    focus.mesh = null;
+    returning = true;
+    hovered = null;
+    nodeTip.hide();
+    document.body.classList.remove("node-hover");
+  });
+
+  const nodesInteractive = () => entered && world.visible && (!portal || portal.isDone());
+  const ndcFromEvent = (e) => {
+    const r = renderer.domElement.getBoundingClientRect();
+    pointerNDC.set(
+      ((e.clientX - r.left) / r.width) * 2 - 1,
+      -((e.clientY - r.top) / r.height) * 2 + 1,
+    );
+  };
+
+  if (!TOUCH) {
+    renderer.domElement.addEventListener("pointermove", ndcFromEvent, { passive: true });
+  }
+  renderer.domElement.addEventListener("click", (e) => {
+    if (!nodesInteractive()) return; // let the portal own pre-entry clicks
+    ndcFromEvent(e);
+    raycaster.setFromCamera(pointerNDC, camera);
+    const hit = raycaster.intersectObjects(projectMeshes, false)[0];
+    if (!hit) return;
+    e.stopPropagation();
+    panel.show(hit.object.userData.project, document.documentElement.lang || "en");
+    focus.active = true;
+    focus.mesh = hit.object;
+    returning = false;
+    nodeTip.hide();
+  });
+  addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && panel.isOpen()) panel.hide();
+  });
 
   // axis labels overlay (DOM)
   buildAxisLabels(document.body);
@@ -575,16 +636,50 @@ function runThree() {
     if (surfaceMat) surfaceMat.uniforms.uTime.value = t;
     pulseMats.forEach((m) => (m.uniforms.uTime.value = t));
 
+    // ---- project node hover (desktop): scale + cursor + name tip ----
+    if (!TOUCH && nodesInteractive() && !focus.active) {
+      raycaster.setFromCamera(pointerNDC, camera);
+      const hit = raycaster.intersectObjects(projectMeshes, false)[0];
+      const next = hit ? hit.object : null;
+      if (next !== hovered) {
+        if (hovered) hovered.scale.setScalar(1);
+        hovered = next;
+        if (hovered) hovered.scale.setScalar(1.6);
+        document.body.classList.toggle("node-hover", !!hovered);
+        nodeTip.show(hovered ? hovered.userData.project.name : null);
+      }
+    }
+
     // ambient camera: slow LOW-amplitude orbit (drift, NOT a full spin) around
     // the landscape. Scroll maps to a gentle additional orbit + dolly-in (the
     // reference 3/4 angle is the home pose). DESIGN: one focal motion = the
     // generational breath; the orbit stays subtle.
     const scroll = scrollProgress();
-    rig.rotation.z = BASE_YAW + Math.sin(t * 0.045) * 0.06 + scroll * 0.5;
-
-    // SUBTLE dolly: audio energy + scroll pull the camera gently in.
     const energy = audio.getEnergy ? audio.getEnergy() : 0;
-    camera.position.z = CAM_Z - energy * 0.12 - scroll * 0.5;
+
+    if (focus.active && focus.mesh) {
+      // fly-to: freeze the ambient orbit (so the marker doesn't drift out from
+      // under us) and lerp the camera to frame the node, looking right at it.
+      focus.mesh.getWorldPosition(_wp);
+      _dest.set(_wp.x, _wp.y, _wp.z + 1.8);
+      camera.position.lerp(_dest, REDUCED ? 1 : 0.08);
+      camera.lookAt(_wp);
+    } else {
+      rig.rotation.z = BASE_YAW + Math.sin(t * 0.045) * 0.06 + scroll * 0.5;
+      if (returning) {
+        // fly home, restoring the original look-at-origin pose, then resume
+        camera.position.lerp(HOME, REDUCED ? 1 : 0.1);
+        camera.lookAt(0, 0, 0);
+        if (REDUCED || camera.position.distanceTo(HOME) < 0.02) {
+          camera.position.copy(HOME);
+          camera.lookAt(0, 0, 0);
+          returning = false;
+        }
+      } else {
+        // SUBTLE dolly: audio energy + scroll pull the camera gently in.
+        camera.position.z = CAM_Z - energy * 0.12 - scroll * 0.5;
+      }
+    }
 
     renderer.render(scene, camera);
     requestAnimationFrame(loop);

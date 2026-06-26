@@ -61,6 +61,11 @@ export function objToWorld(o) {
   return o * 2 - 1;
 }
 
+// World height of a fitness=1 peak. Single source of truth for the surface
+// frame; field.js re-exports it and node placement (nodes.js) imports it here
+// (keeping nodes.js free of the THREE import chain so it stays unit-testable).
+export const Z_SCALE = 1.45;
+
 /**
  * Sample the surface on a SUBDIV×SUBDIV grid. Returns flat typed arrays ready
  * for a THREE.BufferGeometry: centered XY world positions in [-1,1], height in

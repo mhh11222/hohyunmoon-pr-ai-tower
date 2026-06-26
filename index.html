@@ -110,6 +110,19 @@
     <div class="reticle" id="reticle"><span class="ring"></span></div>
     <div class="coordreadout" id="coordreadout">obj[0.00, 0.00]</div>
 
+    <!-- project node hover tip (name follows the cursor) -->
+    <div class="node-tip" id="node-tip" aria-hidden="true"></div>
+
+    <!-- project info panel (hidden until a node is clicked) -->
+    <aside id="project-panel" class="project-panel" hidden aria-live="polite">
+      <button class="project-panel-close" type="button" aria-label="Close">×</button>
+      <div class="project-panel-tags" id="project-panel-tags"></div>
+      <h2 class="project-panel-name" id="project-panel-name"></h2>
+      <p class="project-panel-blurb" id="project-panel-blurb"></p>
+      <p class="project-panel-impact" id="project-panel-impact"></p>
+      <a class="project-panel-link" id="project-panel-link" href="#" target="_blank" rel="noopener noreferrer">OPEN ON GITHUB →</a>
+    </aside>
+
     <!-- content (C placement: lower-left) -->
     <main class="hero">
       <div class="titleblock">
@@ -142,6 +155,11 @@
           ><a href="mailto:door@smilewide.co.kr">door@smilewide.co.kr</a>
         </p>
       </div>
+
+      <!-- Selected projects: crawlable + screen-reader mirror of the floating
+           3D nodes. Filled by src/main.js from the single source data/projects.js
+           so search engines and assistive tech get real text, not just WebGL. -->
+      <section id="projects" class="projects-mirror" aria-label="Selected projects"></section>
     </main>
 
     <script type="module" src="./src/main.js"></script>

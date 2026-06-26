@@ -735,3 +735,148 @@ body.portal-active .axis-overlay {
     width: 64px;
   }
 }
+
+/* ===================================================================
+   PROJECT NODES — hover tip, info panel, crawlable mirror
+   =================================================================== */
+
+/* cursor affordance: nodes are clickable */
+body.node-hover #bg {
+  cursor: pointer;
+}
+
+/* hover tip — project name trailing the cursor */
+.node-tip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 28;
+  padding: 4px 9px;
+  font: 700 0.72rem "JetBrains Mono", monospace;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  background: var(--thermal);
+  border-radius: 3px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -180%);
+  transition: opacity 0.15s var(--ease-out);
+  white-space: nowrap;
+}
+.node-tip.live {
+  opacity: 0.96;
+}
+
+/* info panel — bottom-right, above the audio dock */
+.project-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 132px;
+  z-index: 30;
+  width: min(340px, 82vw);
+  padding: 18px 20px 20px;
+  background: rgba(6, 10, 15, 0.85);
+  border: 1px solid var(--thermal);
+  border-radius: 4px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 0 32px rgba(255, 106, 61, 0.16);
+  color: var(--bone);
+  font-family: "JetBrains Mono", monospace;
+  animation: panelin 0.3s var(--ease-out);
+}
+.project-panel[hidden] {
+  display: none;
+}
+@keyframes panelin {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.project-panel-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--mute);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.project-panel-close:hover {
+  color: var(--thermal);
+}
+.project-panel-tags {
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  color: var(--thermal);
+  text-transform: uppercase;
+}
+.project-panel-name {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  margin: 6px 0 8px;
+  color: var(--bone);
+}
+.project-panel-blurb {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--bone);
+  opacity: 0.86;
+  margin: 0 0 10px;
+}
+.project-panel-impact {
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--mute);
+  margin: 0 0 12px;
+}
+.project-panel-link {
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  color: var(--thermal);
+  text-decoration: none;
+}
+.project-panel-link:hover {
+  text-decoration: underline;
+}
+
+/* crawlable + screen-reader mirror: present in DOM, off-screen for sighted
+   users (the 3D nodes + panel are their channel). Real indexable content. */
+.projects-mirror {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-panel {
+    animation: none;
+  }
+  .node-tip {
+    transition: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .project-panel {
+    right: 12px;
+    left: 12px;
+    width: auto;
+    bottom: 116px;
+  }
+}

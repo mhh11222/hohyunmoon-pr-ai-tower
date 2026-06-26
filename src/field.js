@@ -5,6 +5,7 @@ import {
   globalOptimum,
   objToWorld,
   sampleSurface,
+  Z_SCALE,
 } from "./landscape.js";
 
 // ---------------------------------------------------------------------------
@@ -20,7 +21,7 @@ import {
 //   surface, particles, contour, axes and × marker register exactly.
 // ---------------------------------------------------------------------------
 
-export const Z_SCALE = 1.45; // world height of a fitness=1 peak
+export { Z_SCALE }; // re-export (defined in landscape.js) for existing importers
 const PARTICLE_LIFT = 0.018; // hover dots just above the surface (anti-z-fight)
 
 // per-genome satellites → a dense field, not a handful of dots
