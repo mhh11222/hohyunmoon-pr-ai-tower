@@ -50,7 +50,16 @@ export function render(state) {
     `산 ${game.pile.length}장 · ${game.handNumber}판째`;
 
   document.getElementById("opponents").innerHTML = opponents
-    .map((p) => `
+    .map((p) => state.use3D
+      ? `<section class="seat slim ${game.turn === p.seat && game.phase !== PHASE.CALLS ? "active" : ""}">
+          <div class="seat-head">
+            <span class="seat-name"><b>${seatLabel(game, p.seat)}</b> 봇 · 손패 ${p.concealed.length}장${
+              p.melds.length ? ` · 공개 ${p.melds.length}묶음` : ""
+            }${p.flowers.length ? ` · 꽃 ${p.flowers.length}` : ""}</span>
+            ${sticksHTML(game.bank.players[p.seat])}
+          </div>
+        </section>`
+      : `
       <section class="seat ${game.turn === p.seat && game.phase !== PHASE.CALLS ? "active" : ""}">
         <div class="seat-head">
           <span class="seat-name"><b>${seatLabel(game, p.seat)}</b> 봇</span>

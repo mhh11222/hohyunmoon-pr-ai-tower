@@ -13,6 +13,8 @@ import { isWinningHand } from "../src/hand.js";
 import { tileName, SEATS } from "../src/tiles.js";
 import { coachHand, tileNote, mnemonic, MNEMONICS } from "./coach.js";
 import { render, showSheet, hideSheet, resultSheet, callButtonLabel, seatLabel } from "./view.js";
+import { createTable } from "./table3d.js";
+import { createAudio } from "./sound.js";
 
 export const MODES = {
   learn: { key: "learn", name: "학습 모드", guide: true, coach: true, undo: true, botDelay: 900, callDelay: 600 },
@@ -36,6 +38,11 @@ const state = {
   pending: null,   // 일시정지 중 밀린 진행
   undoStack: [],
   timer: null,
+  table: null,      // 3D 테이블 (없으면 2D로 돈다)
+  use3D: false,
+  sound: null,
+  music: true,
+  sfx: true,
 };
 
 /* ── 말하기 ─────────────────────────────────────────── */
@@ -54,7 +61,31 @@ function withMnemonic(text, key) {
 
 /* ── 진행 ───────────────────────────────────────────── */
 
-function newGame(mode, playerCount = 2, rounds = 4) {
+function table() {
+  return state.use3D ? state.table : null;
+}
+
+/** 소리와 3D는 사용자가 버튼을 누른 뒤에 켠다 (자동 재생 금지) */
+async function prepare() {
+  if (!state.sound) {
+    state.sound = createAudio();
+    state.sound.unlock();
+    if (state.music) state.sound.startMusic();
+  }
+  if (state.table === null) {
+    state.table = (await createTable(document.getElementById("table3d"), { sound: state.sound })) || false;
+    state.use3D = !!state.table;
+    document.getElementById("stage").hidden = !state.use3D;
+    document.getElementById("center").hidden = state.use3D;
+    if (state.use3D) {
+      state.table.start();
+      addEventListener("resize", () => state.table.resize());
+      new ResizeObserver(() => state.table.resize()).observe(document.getElementById("stage"));
+    }
+  }
+}
+
+async function newGame(mode, playerCount = 2, rounds = 4) {
   state.mode = mode;
   state.rounds = rounds;
   state.paused = false;
@@ -63,6 +94,34 @@ function newGame(mode, playerCount = 2, rounds = 4) {
   state.bots = Array.from({ length: playerCount }, () => makeBot());
   startHand(state.game);
   hideSheet();
+  await prepare();
+  await ceremony();
+}
+
+/** 섞기 → 산 쌓기 → 주사위 → 배패를 눈으로 보여 준다 */
+async function ceremony() {
+  const g = state.game;
+  state.picked = null;
+  state.note = null;
+  state.undoStack = [];
+  if (!state.use3D) {
+    announceDeal();
+    return step();
+  }
+  const stage = {
+    shuffle: ["패를 섞습니다.", "섞는 중"],
+    wall: ["<b>산(벽)</b>을 2단으로 쌓습니다. 산은 이어진 하나의 담입니다.", "산 쌓기"],
+    dice: ["딜러가 <b>주사위</b>를 굴려 산의 입구를 정합니다.", "주사위"],
+    deal: ["입구부터 <b>벽돌 2개(4장)씩</b> 4바퀴 — 손패 16장, 딜러만 17장.", "배패"],
+  };
+  state.buttons = [];
+  await state.table.newHand(g, {
+    humanSeat: state.human,
+    onStage: (name) => {
+      const [full, terse] = stage[name] || [];
+      if (full) { say(full, terse); render(state); }
+    },
+  });
   announceDeal();
   step();
 }
@@ -87,6 +146,7 @@ function step() {
   state.buttons = [];
   updateCoach();
   updateTools();
+  table()?.sync(g);
 
   if (g.phase === PHASE.WON || g.phase === PHASE.EXHAUSTED) {
     render(state);
@@ -108,7 +168,7 @@ function humanTurn() {
       withMnemonic("<b>내 차례</b> — 먼저 한 장 뽑습니다.", "rhythm"),
       "내 차례 — 뽑기"
     );
-    state.buttons = [{ label: "뽑기", style: "hot", onClick: () => { remember(); draw(g); step(); } }];
+    state.buttons = [{ label: "뽑기", style: "hot", onClick: () => { remember(); table()?.drawTile(state.human, state.human); draw(g); step(); } }];
     return render(state);
   }
 
@@ -146,6 +206,7 @@ function doDiscard() {
   state.picked = null;
   state.note = null;
   remember();
+  table()?.discardTile(state.human, tile, state.human);
   discard(state.game, tile);
   step();
 }
@@ -194,6 +255,7 @@ function resolveWith(humanClaim) {
 
   const last = g.log[g.log.length - 1];
   if (last?.type === "call" && last.call !== "win") {
+    table()?.meldTiles(last.seat, last.tiles, last.from, state.human);
     const label = { pong: "펑", chow: "치", kong: "깡" }[last.call];
     say(
       withMnemonic(`${seatLabel(g, last.seat)}가 <b>${label}</b>했습니다.`, "locked"),
@@ -209,12 +271,13 @@ function botTurn() {
   const bot = state.bots[seat];
   const p = g.players[seat];
 
-  if (g.phase === PHASE.DRAW) { draw(g); return step(); }
+  if (g.phase === PHASE.DRAW) { table()?.drawTile(seat, state.human); draw(g); return step(); }
   if (g.phase !== PHASE.DISCARD) return step();
 
   if (bot.wantsWin(p)) { declareWin(g, seat); return step(); }
   const tile = bot.discard(p);
   say(`${seatLabel(g, seat)}가 <b>${tileName(tile)}</b>를 버렸습니다.`, `${seatLabel(g, seat)} → ${tileName(tile)}`);
+  table()?.discardTile(seat, tile, state.human);
   discard(g, tile);
   step();
 }
@@ -243,6 +306,7 @@ function undo() {
   clearTimeout(state.timer);
   state.pending = null;
   restoreGame(state.game, snap);
+  table()?.rebuild(state.game, state.human);
   state.picked = null;
   state.note = null;
   state.flash = "<b>한 수 물렸습니다.</b> 다시 골라 보세요.";
@@ -253,6 +317,8 @@ function updateTools() {
   const tools = [
     { label: state.mode === MODES.learn ? "🎓 학습" : "⚡ 실전", style: "chip", onClick: switchMode },
     { label: state.paused ? "▶ 계속" : "⏸ 멈춤", style: "chip", onClick: togglePause },
+    { label: state.music ? "🎵" : "🎵̶", style: "chip", onClick: toggleMusic },
+    { label: state.sfx ? "🔊" : "🔇", style: "chip", onClick: toggleSfx },
     { label: "?", style: "chip", onClick: helpSheet },
   ];
   if (state.mode.undo) {
@@ -264,6 +330,19 @@ function updateTools() {
     });
   }
   state.tools = tools;
+}
+
+function toggleMusic() {
+  state.music = state.sound ? state.sound.toggleMusic() : !state.music;
+  updateTools();
+  render(state);
+}
+
+function toggleSfx() {
+  state.sfx = !state.sfx;
+  state.sound?.setSfx(state.sfx);
+  updateTools();
+  render(state);
 }
 
 function switchMode() {
@@ -305,12 +384,22 @@ function sheet(html, buttons) {
 
 function finishHand() {
   const g = state.game;
+  const r = g.result;
+  const t = table();
+  if (t && r?.winner !== null && r?.winner !== undefined) {
+    t.revealWin(
+      [...g.players[r.winner].melds.map((m) => m.tiles), ...r.decomposition.sets.map((x) => x.tiles)],
+      r.decomposition.pair
+    );
+    t.payment(r.payments, state.human);
+  }
   const last = g.handNumber >= state.rounds;
-  sheet(resultSheet(g, state.human, state.mode.guide), [
+  const showResult = () => sheet(resultSheet(g, state.human, state.mode.guide), [
     last
       ? { label: "최종 정산", style: "hot", onClick: showFinal }
-      : { label: "다음 판", style: "hot", onClick: () => { nextHand(g); hideSheet(); announceDeal(); step(); } },
+      : { label: "다음 판", style: "hot", onClick: () => { nextHand(g); hideSheet(); ceremony(); } },
   ]);
+  if (t) setTimeout(showResult, 1400); else showResult();
 }
 
 function showFinal() {

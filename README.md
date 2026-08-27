@@ -31,6 +31,15 @@ frame renders once, frozen; touch → cursor instruments drop out.
 - **Vitest** for the GA core (`tests/ga.test.js`).
 - Ships as static files on **GitHub Pages** (`.nojekyll`).
 
+## Also here: 대만마작 학습용 게임 (`/mahjong/`)
+
+A Taiwanese mahjong (16-tile) learning simulator built to one physical set's exact
+spec — 140 tiles, four season flowers only, 伍 for the 5 of characters, blank white
+dragon. Rules engine is pure JS with unit tests; the table is three.js; every sound
+(tile clacks and a 90s-Hong-Kong-flavoured pentatonic score) is synthesized in
+WebAudio, no audio files. Learning mode coaches every discard; practice mode gets
+out of the way. See `mahjong/README.md`.
+
 ## Run locally
 
 ```bash

@@ -19,11 +19,19 @@
   <p id="subtitle"></p>
   <div id="coach" hidden></div>
   <div id="opponents"></div>
+  <div id="stage" hidden><canvas id="table3d"></canvas></div>
   <div id="center"></div>
   <section class="seat" id="me"></section>
   <div id="actions"></div>
 </div>
 <div id="overlay"></div>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.min.js"
+  }
+}
+</script>
 <script type="module">
   import { boot } from "./ui/app.js";
   boot();

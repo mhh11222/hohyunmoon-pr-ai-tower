@@ -8,6 +8,7 @@
     "mahjong": "node mahjong/demo.js"
   },
   "devDependencies": {
+    "three": "^0.185.1",
     "vitest": "^2.1.0"
   }
 }
