@@ -6,7 +6,7 @@
 //   4인: 아래(나)·오른쪽·위·왼쪽  /  3인: 아래·오른위·왼위  /  2인: 아래·위
 // 패는 눕힌 상자. 윗면(+Y)이 얼굴, 아랫면이 대나무 등판이다.
 
-import { Timeline, tween, lerp, arc, easeOutCubic, easeInOutQuad } from "./anim.js";
+import { Timeline, tween, lerp, arc, easeOutCubic, easeInOutQuad, linear as linearEase } from "./anim.js";
 import { faceCanvas, diceCanvas } from "./tiletexture.js";
 
 const TILE = { w: 0.068, h: 0.095, d: 0.046 };
@@ -635,37 +635,75 @@ export async function createTable(canvas, { sound = null } = {}) {
     hands3d = Array.from({ length: sideCount }, (_, s) => buildHand(s !== 0));
     seatCats3d(cats);
 
+    // 0) 첫 판이면 딜러 뽑기 — 내가 주사위를 굴리고 합만큼 세어 딜러가 정해진다
+    if (game.handNumber === 1 && game.dealerRoll) {
+      onStage?.("dealerRoll", game.dealerRoll);
+      await rollDice(game.dealerRoll.dice, 0);
+      await pause(1.4);
+      for (const die of dice) recycle(die);
+      dice = [];
+    }
+
     onStage?.("shuffle");
     const total = game.pile.length + game.players.reduce(
       (n, p) => n + p.concealed.length + p.flowers.length, 0
     );
 
-    // 1) 섞기 — 엎은 패가 가운데서 휘휘 돈다
-    sound?.sfx?.shuffle?.(1.1);
+    // 1) 섞기 — 실제처럼: 패를 전부 엎어 흩뜨리고, 손이 휘저으며 이리저리 민다
+    sound?.sfx?.shuffle?.(2.6);
     const swirl = [];
-    for (let i = 0; i < 24; i++) {
+    const scatter = () => new THREE.Vector3(
+      (Math.random() - 0.5) * 1.05,
+      TILE.d / 2,
+      (Math.random() - 0.5) * 0.8
+    );
+    for (let i = 0; i < 30; i++) {
       const mesh = makeTile(null);
-      const angle = (i / 24) * Math.PI * 2;
-      mesh.position.set(Math.cos(angle) * 0.5, TILE.d / 2, Math.sin(angle) * 0.35);
-      mesh.rotation.y = angle;
+      mesh.position.copy(scatter());
+      mesh.rotation.y = Math.random() * Math.PI * 2;
       swirl.push(mesh);
-      timeline.add(
-        tween({
-          duration: 1.1,
+    }
+    // 세 차례에 걸쳐 각 패가 아무 데로나 미끄러진다 — 밀리고 부딪히는 섞기
+    for (let round = 0; round < 3; round++) {
+      for (const mesh of swirl) {
+        const from = null;
+        const to = scatter();
+        const rotFrom = mesh.rotation.y;
+        const rotTo = rotFrom + (Math.random() - 0.5) * 2.4;
+        timeline.add(tween({
+          duration: 0.55,
+          delay: round * 0.62 + Math.random() * 0.25,
           ease: easeInOutQuad,
           onUpdate: (t) => {
-            const a = angle + t * Math.PI * 2.2;
-            const r = lerp(0.5, 0.12, t);
-            mesh.position.x = Math.cos(a) * r;
-            mesh.position.z = Math.sin(a) * r * 0.7;
-            mesh.position.y = TILE.d / 2 + arc(t, 0.12);
-            mesh.rotation.y = a;
+            void from;
+            mesh.position.x = lerp(mesh.userData.sx ?? mesh.position.x, to.x, t);
+            mesh.position.z = lerp(mesh.userData.sz ?? mesh.position.z, to.z, t);
+            mesh.rotation.y = lerp(rotFrom, rotTo, t);
+            if (t >= 1) { mesh.userData.sx = to.x; mesh.userData.sz = to.z; }
+            else if (mesh.userData.sx === undefined) { mesh.userData.sx = mesh.position.x; mesh.userData.sz = mesh.position.z; }
           },
-        })
-      );
+        }));
+      }
+      // 손들이 원을 그리며 휘젓는다
+      for (const [hi, hand] of hands3d.entries()) {
+        if (hi > 1) break;
+        hand.visible = true;
+        const phase0 = hi * Math.PI;
+        timeline.add(tween({
+          duration: 0.62,
+          delay: round * 0.62,
+          ease: linearEase,
+          onUpdate: (t) => {
+            const a = phase0 + (round + t) * Math.PI * 1.6;
+            hand.position.set(Math.cos(a) * 0.4, 0.11, Math.sin(a) * 0.3);
+            hand.rotation.y = a;
+          },
+        }));
+      }
     }
     await settle();
-    for (const mesh of swirl) recycle(mesh);
+    for (const hand of hands3d) hand.visible = false;
+    for (const mesh of swirl) { mesh.userData.sx = undefined; mesh.userData.sz = undefined; recycle(mesh); }
 
     // 2) 산 쌓기 — 인원수만큼의 벽을 아래 칸부터 2단으로.
     //    엔진이 정한 입구(주사위) 기준의 뽑기 순서를 그대로 물리 자리에 맞춘다.

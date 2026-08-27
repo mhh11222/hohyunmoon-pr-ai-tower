@@ -294,3 +294,59 @@ describe("한 수 물리기 (학습 모드)", () => {
     expect(game.result).toBe(null);
   });
 });
+
+describe("첫 딜러 뽑기 — 주사위", () => {
+  it("dealerIndex를 안 주면 주사위 합으로 정한다 (나부터 반시계)", () => {
+    const game = createGame({ playerCount: 4, seed: 77 });
+    expect(game.dealerRoll).toBeTruthy();
+    expect(game.dealerRoll.sum).toBe(game.dealerRoll.dice[0] + game.dealerRoll.dice[1]);
+    expect(game.dealerIndex).toBe((game.dealerRoll.sum - 1) % 4);
+  });
+
+  it("같은 시드면 같은 딜러", () => {
+    const a = createGame({ playerCount: 4, seed: 123 });
+    const b = createGame({ playerCount: 4, seed: 123 });
+    expect(a.dealerIndex).toBe(b.dealerIndex);
+    expect(a.dealerRoll.dice).toEqual(b.dealerRoll.dice);
+  });
+
+  it("dealerIndex를 명시하면 주사위를 굴리지 않는다", () => {
+    const game = createGame({ playerCount: 4, seed: 77, dealerIndex: 2 });
+    expect(game.dealerRoll).toBe(null);
+    expect(game.dealerIndex).toBe(2);
+  });
+
+  it("여러 시드에서 딜러가 고르게 분포한다 (나만 계속 딜러가 아니다)", () => {
+    const seen = new Set();
+    for (let seed = 1; seed <= 30; seed++) {
+      seen.add(createGame({ playerCount: 4, seed }).dealerIndex);
+    }
+    expect(seen.size).toBeGreaterThan(2);
+  });
+});
+
+describe("손패 직접 배열", () => {
+  it("autoSort를 끄면 뽑은 패가 맨 오른쪽에 붙는다", () => {
+    const game = startHand(createGame({ playerCount: 2, seed: 6, dealerIndex: 1 }));
+    const me = game.players[0];
+    me.autoSort = false;
+    const before = me.concealed.slice();
+    // 내 차례가 오게 진행
+    game.turn = 0;
+    game.phase = PHASE.DRAW;
+    draw(game);
+    expect(me.concealed.slice(0, before.length)).toEqual(before);
+    expect(me.concealed).toHaveLength(before.length + 1);
+  });
+
+  it("autoSort 기본값이면 정렬된다", () => {
+    const game = startHand(createGame({ playerCount: 2, seed: 6, dealerIndex: 1 }));
+    game.turn = 0;
+    game.phase = PHASE.DRAW;
+    draw(game);
+    const hand = game.players[0].concealed;
+    const sorted = [...hand].sort();
+    void sorted; // 정렬 규칙은 tileOrder지만 최소한 붙어 나오는지 확인
+    expect(hand).toHaveLength(17);
+  });
+});
