@@ -54,6 +54,18 @@ export function melodyPhrase(bar, rand = Math.random) {
   return phrase.map((n) => ({ ...n, d: n.d + lift }));
 }
 
+/**
+ * 외치기 사양 — 치·펑·깡·완성은 실제로 입으로 외치는 선언이다.
+ * 동물의 숲 주민처럼 "말하는 척"하는 짧은 음절 비프로 만든다.
+ *   f: 음절의 기준 음높이 배율, len: 길이(초), rise/drop: 억양
+ */
+export const SHOUTS = {
+  pong: { text: "펑!!", syllables: [{ f: 1.0, len: 0.2, drop: true }] },
+  chow: { text: "치~!", syllables: [{ f: 1.35, len: 0.16, rise: true }] },
+  kong: { text: "깡!!", syllables: [{ f: 0.82, len: 0.22, drop: true }] },
+  win: { text: "완성!!", syllables: [{ f: 0.95, len: 0.14 }, { f: 1.4, len: 0.26, drop: true }] },
+};
+
 /* ── 소리 만들기 ────────────────────────────────────── */
 
 const BPM = 68;              // 잔잔하게
@@ -192,6 +204,69 @@ export function createAudio() {
     osc.connect(formant).connect(g).connect(sfxBus);
     osc.start(t); vibrato.start(t);
     osc.stop(t + len + 0.05); vibrato.stop(t + len + 0.05);
+  }
+
+  /**
+   * 외치기 — "펑!!" 같은 선언을 동물의 숲풍 목소리로.
+   * 음절마다: 자음 노이즈 한 톡 + 빠른 비브라토가 걸린 톱니파를 입(밴드패스)에 통과.
+   * pitch는 외치는 이의 몸집 (고양이별로 다르고, 사람은 1).
+   */
+  function shout(kind, { pitch = 1 } = {}) {
+    const spec = SHOUTS[kind];
+    if (!spec || !ensure() || !sfxOn) return;
+    let t = ctx.currentTime + 0.02;
+    for (const syl of spec.syllables) {
+      const f0 = 340 * pitch * syl.f * (0.97 + Math.random() * 0.06);
+
+      // 자음 — 짧은 노이즈 톡
+      const burst = ctx.createBufferSource();
+      burst.buffer = noiseBuffer(0.03);
+      const burstBand = ctx.createBiquadFilter();
+      burstBand.type = "bandpass";
+      burstBand.frequency.value = 2600 * pitch;
+      const burstGain = ctx.createGain();
+      burstGain.gain.setValueAtTime(0.25, t);
+      burstGain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+      burst.connect(burstBand).connect(burstGain).connect(sfxBus);
+      burst.start(t);
+      burst.stop(t + 0.04);
+
+      // 모음 — 말하는 척하는 톱니파
+      const osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      if (syl.rise) {
+        osc.frequency.setValueAtTime(f0 * 0.8, t);
+        osc.frequency.exponentialRampToValueAtTime(f0 * 1.2, t + syl.len);
+      } else if (syl.drop) {
+        osc.frequency.setValueAtTime(f0 * 1.15, t);
+        osc.frequency.exponentialRampToValueAtTime(f0 * 0.72, t + syl.len);
+      } else {
+        osc.frequency.setValueAtTime(f0, t);
+      }
+      const wobble = ctx.createOscillator();
+      wobble.frequency.value = 28; // 빠른 떨림 — 웅얼웅얼 말소리 느낌
+      const wobbleGain = ctx.createGain();
+      wobbleGain.gain.value = f0 * 0.08;
+      wobble.connect(wobbleGain).connect(osc.frequency);
+
+      const mouth = ctx.createBiquadFilter();
+      mouth.type = "bandpass";
+      mouth.Q.value = 1.1;
+      mouth.frequency.setValueAtTime(1300 * pitch, t);
+      mouth.frequency.exponentialRampToValueAtTime(800 * pitch, t + syl.len);
+
+      const g = ctx.createGain();
+      const vol = 0.5 / Math.sqrt(pitch);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+      g.gain.setValueAtTime(vol, t + syl.len * 0.65);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + syl.len);
+
+      osc.connect(mouth).connect(g).connect(sfxBus);
+      osc.start(t); wobble.start(t);
+      osc.stop(t + syl.len + 0.05); wobble.stop(t + syl.len + 0.05);
+      t += syl.len + 0.04;
+    }
   }
 
   /** 산가지 — 가는 대나무가 부딪히는 소리 */
@@ -409,6 +484,6 @@ export function createAudio() {
     toggleMusic() { return musicOn ? (stopMusic(), false) : startMusic(); },
     startMusic,
     stopMusic,
-    sfx: { clack, stick, dice, shuffle, fanfare, meow },
+    sfx: { clack, stick, dice, shuffle, fanfare, meow, shout },
   };
 }

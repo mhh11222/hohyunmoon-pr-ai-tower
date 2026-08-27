@@ -18,7 +18,7 @@ import {
   render, showSheet, hideSheet, resultSheet, callButtonLabel, seatLabel, exchangeSheetHTML,
 } from "./view.js";
 import { createTable } from "./table3d.js";
-import { createAudio } from "./sound.js";
+import { createAudio, SHOUTS } from "./sound.js";
 
 export const MODES = {
   learn: {
@@ -315,6 +315,7 @@ function resolveWith(humanClaim) {
 
   const last = g.log[g.log.length - 1];
   if (last?.type === "call" && last.call !== "win") {
+    shoutCall(last.call, last.seat);
     table()?.meldTiles(last.seat, last.tiles, last.from, state.human);
     emote(last.seat, last.call === "chow" ? "chow" : "call");
     if (last.seat === state.human) emote(last.from, "robbed", { delay: 350 });
@@ -347,6 +348,24 @@ function botTurn() {
   table()?.discardTile(seat, tile, state.human);
   discard(g, tile);
   step();
+}
+
+/* ── 외치기 — 치·펑·깡·완성은 입으로 선언한다 ─────────── */
+
+let shoutTimer = null;
+
+function shoutCall(kind, seat) {
+  const spec = SHOUTS[kind];
+  if (!spec) return;
+  const cat = state.cats[seat];
+  const who = seat === state.human ? "나" : (cat?.name ?? "");
+  state.sound?.sfx?.shout?.(kind, { pitch: cat?.pitch ?? 1 });
+
+  const el = document.getElementById("shout");
+  el.innerHTML = `<div class="word">${spec.text}</div><div class="who">${who}</div>`;
+  el.hidden = false;
+  clearTimeout(shoutTimer);
+  shoutTimer = setTimeout(() => { el.hidden = true; }, 1100);
 }
 
 /* ── 고양이 감정 표현 ───────────────────────────────── */
@@ -511,6 +530,7 @@ function finishHand() {
   const r = g.result;
   const t = table();
   if (r?.winner !== null && r?.winner !== undefined) {
+    shoutCall("win", r.winner);
     emote(r.winner, "win");
     for (const pay of r.payments) emote(pay.from, "lose", { delay: 500 });
   } else if (r?.exhausted) {

@@ -58,10 +58,12 @@ describe("감정 표현", () => {
   });
 
   it("우는 상황과 조용한 상황이 나뉜다", () => {
-    expect(EMOTES.win.meow).toBe(true);
+    expect(EMOTES.greet.meow).toBe(true);
     expect(EMOTES.robbed.meow).toBe(true);
     expect(EMOTES.draw.meow).toBe(false);
-    expect(EMOTES.waiting.meow).toBe(false);
+    // 부르기·완성은 외치기(shout)가 소리를 맡아 야옹은 끈다
+    expect(EMOTES.call.meow).toBe(false);
+    expect(EMOTES.win.meow).toBe(false);
   });
 
   it("모르는 상황이면 null", () => {
