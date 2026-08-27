@@ -92,26 +92,34 @@ function move(from, to, combo) {
   }
 }
 
-/** 액면가는 그대로, 큰 산가지를 잔돈으로 바꾼다 (더미와 값이 같은 교환) */
-export function breakWithPot(bank, seat, want) {
-  const purse = bank.players[seat];
+/**
+ * 액면가는 그대로, 큰 산가지를 잔돈으로 바꾼다 (값이 같은 교환).
+ * source는 가운데 더미일 수도, 다른 사람 지갑일 수도 있다 —
+ * 실제로도 "누가 잔돈 좀 바꿔줘" 하고 아무하고나 바꾼다.
+ */
+function breakWith(purse, source, want) {
   for (const v of [100, 50]) {
     if (!purse[v]) continue;
-    const from = { ...bank.pot };
+    const from = { ...source };
     from[v] = 0; // 같은 액면가로 바꿔 봐야 소용없다
     const smaller = exactCombo(from, v);
     if (!smaller) continue;
-    move(purse, bank.pot, { [v]: 1 });
-    move(bank.pot, purse, smaller);
+    move(purse, source, { [v]: 1 });
+    move(source, purse, smaller);
     if (!want || exactCombo(purse, want)) return true;
   }
   return false;
 }
 
+/** (호환용) 더미와 바꾸기 */
+export function breakWithPot(bank, seat, want) {
+  return breakWith(bank.players[seat], bank.pot, want);
+}
+
 /**
  * 산가지 옮기기. 액면가가 안 맞으면 크게 내고 거스름돈을 받는다 — 현금과 똑같이.
- * 거스름돈은 받은 사람이 내주고, 그래도 안 맞으면 가운데 더미에서 잔돈으로 바꾼다.
- * 더미는 값을 잃지도 얻지도 않으므로 손익 합계는 언제나 0이다.
+ * 거스름돈은 받는 사람이 내주고, 잔돈이 없으면 더미나 다른 사람과 값이 같게 바꾼다.
+ * 어떤 경우든 총합은 변하지 않으므로 손익 합계는 언제나 0이다.
  * 반환: 애니메이션용 기록 { hand, change }
  */
 export function transfer(bank, fromSeat, toSeat, amount) {
@@ -122,14 +130,18 @@ export function transfer(bank, fromSeat, toSeat, amount) {
     throw new Error(`${fromSeat}번 자리는 ${amount}점을 낼 산가지가 없다`);
   }
 
-  for (let attempt = 0; attempt < 4; attempt++) {
+  // 잔돈 바꿀 상대 후보: 더미 먼저, 그다음 다른 사람들
+  const sources = (skip) =>
+    [bank.pot, ...bank.players.filter((_, i) => i !== fromSeat && i !== skip)];
+
+  for (let attempt = 0; attempt < 6; attempt++) {
     const exact = exactCombo(payer, amount);
     if (exact) {
       move(payer, receiver, exact);
       return { hand: exact, change: emptyPurse() };
     }
 
-    // 크게 내고 거스름돈 받기 — 거스름돈은 받은 사람이 (방금 받은 산가지 포함) 내준다
+    // 크게 내고 거스름돈 받기 — 거스름돈은 받은 사람이 (방금 받은 것 포함) 내준다
     const pay = payCombo(payer, amount);
     const after = emptyPurse();
     for (const v of VALUES) after[v] = (receiver[v] || 0) + (pay.combo[v] || 0);
@@ -140,8 +152,17 @@ export function transfer(bank, fromSeat, toSeat, amount) {
       return { hand: pay.combo, change };
     }
 
-    // 아직 안 맞으면 더미에서 잔돈으로 바꾸고 다시 시도
-    if (!breakWithPot(bank, fromSeat, amount) && !breakWithPot(bank, toSeat, null)) break;
+    // 아직 안 맞으면 낼 사람부터, 안 되면 받는 사람이 잔돈을 바꿔 온다
+    let broke = false;
+    for (const source of sources(toSeat)) {
+      if (breakWith(payer, source, amount)) { broke = true; break; }
+    }
+    if (!broke) {
+      for (const source of sources(fromSeat)) {
+        if (breakWith(receiver, source, null)) { broke = true; break; }
+      }
+    }
+    if (!broke) break;
   }
   throw new Error("산가지를 맞게 주고받을 수 없다");
 }

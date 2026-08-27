@@ -89,3 +89,44 @@ describe("정산과 환전", () => {
     expect(rows[0].currency).toBe("원");
   });
 });
+
+describe("잔돈 교착 — 더미에 잔돈이 없으면 다른 사람과 바꾼다", () => {
+  it("실전에서 나온 교착 상태를 푼다", () => {
+    const bank = createBank(4);
+    // 4판을 돈 뒤 실제로 나온 지갑 분포: 두 명은 10점이 하나도 없다
+    bank.players = [
+      { 10: 0, 50: 5, 100: 2 },
+      { 10: 0, 50: 5, 100: 2 },
+      { 10: 4, 50: 5, 100: 2 },
+      { 10: 16, 50: 5, 100: 2 },
+    ];
+    bank.pot = { 10: 2, 50: 1, 100: 1 };
+    const before0 = purseValue(bank.players[0]);
+    const before1 = purseValue(bank.players[1]);
+    const beforeTotal = bank.players.reduce((s, p) => s + purseValue(p), 0) + purseValue(bank.pot);
+    // 0번이 1번에게 30점 — 더미(10점 2개)로는 50을 못 바꾸지만 3번이 바꿔줄 수 있다
+    transfer(bank, 0, 1, 30);
+    expect(purseValue(bank.players[0])).toBe(before0 - 30);
+    expect(purseValue(bank.players[1])).toBe(before1 + 30);
+    const total = bank.players.reduce((s, p) => s + purseValue(p), 0) + purseValue(bank.pot);
+    expect(total).toBe(beforeTotal);
+  });
+
+  it("연속 여러 판을 돌려도 옮기기가 막히지 않는다 (긴 시퀀스)", () => {
+    for (const seed of [2026, 777, 31415]) {
+      const bank = createBank(4);
+      let x = seed;
+      const rand = () => (x = (x * 48271) % 2147483647) / 2147483647;
+      for (let i = 0; i < 60; i++) {
+        const from = Math.floor(rand() * 4);
+        let to = Math.floor(rand() * 4);
+        if (to === from) to = (to + 1) % 4;
+        const amount = (Math.floor(rand() * 12) + 1) * 10;
+        if (purseValue(bank.players[from]) < amount) continue;
+        transfer(bank, from, to, amount);
+      }
+      const total = bank.players.reduce((s, p) => s + purseValue(p), 0) + purseValue(bank.pot);
+      expect(total).toBe(2170);
+    }
+  });
+});

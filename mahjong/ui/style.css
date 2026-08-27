@@ -122,7 +122,13 @@ button.card span { display: block; font-size: 12px; font-weight: 500; line-heigh
 .stick.s100::after { background: var(--red); }
 
 .hand { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; }
-.hand.mine .tile { cursor: pointer; }
+.hand.mine .tile { cursor: pointer; touch-action: none; }
+.hand.mine .tile.dragging {
+  transform: translateY(-12px) scale(1.1);
+  box-shadow: 0 8px 16px rgba(0,0,0,.5);
+  outline: 2px solid var(--gold);
+  z-index: 3;
+}
 .hand.mine .tile:active { transform: translateY(-4px); }
 .tile.pick { outline: 2px solid var(--gold); outline-offset: 1px; }
 

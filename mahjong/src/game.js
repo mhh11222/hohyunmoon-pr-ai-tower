@@ -4,7 +4,7 @@
 // 펑·치로 가져왔으면 뽑기를 건너뛰고 바로 버린다.
 
 import { SEATS, isFlower, sortTiles } from "./tiles.js";
-import { makeRng } from "./rng.js";
+import { makeRng, rollDice } from "./rng.js";
 import { shuffleDeck, excludedSuits } from "./deck.js";
 import { openWall, dealHands, resolveFlowers, WALL_COUNT } from "./wall.js";
 import { decompose, isWinningHand, waitingTiles } from "./hand.js";
@@ -26,14 +26,25 @@ function emit(game, type, payload = {}) {
   return game.log[game.log.length - 1];
 }
 
-/** 새 게임(한 바퀴) 시작 — 산가지 은행까지 세팅 */
-export function createGame({ playerCount = 4, seed = 1, dealerIndex = 0, options = {} } = {}) {
+/**
+ * 새 게임(한 바퀴) 시작 — 산가지 은행까지 세팅.
+ * dealerIndex를 안 주면 실제처럼 주사위를 굴려 첫 딜러를 뽑는다:
+ * 0번 자리(나)부터 반시계로 주사위 합만큼 센 자리가 딜러.
+ */
+export function createGame({ playerCount = 4, seed = 1, dealerIndex = null, options = {} } = {}) {
   if (![2, 3, 4].includes(playerCount)) throw new Error("2·3·4인만 지원한다");
+  const rng = makeRng(seed);
+  let dealerRoll = null;
+  if (dealerIndex === null || dealerIndex === undefined) {
+    dealerRoll = rollDice(rng);
+    dealerIndex = (dealerRoll.sum - 1) % playerCount; // 나를 1로 세기 시작
+  }
   return {
     playerCount,
     dealerIndex,
+    dealerRoll,
     options: { ...DEFAULT_OPTIONS, ...options },
-    rng: makeRng(seed),
+    rng,
     bank: createBank(playerCount),
     handNumber: 0,
     phase: PHASE.SETUP,
@@ -125,7 +136,7 @@ export function draw(game) {
     tile = replacement;
   }
 
-  p.concealed = sortTiles([...p.concealed, tile]);
+  p.concealed = p.autoSort === false ? [...p.concealed, tile] : sortTiles([...p.concealed, tile]);
   game.lastDraw = { seat, tile };
   game.phase = PHASE.DISCARD;
   emit(game, "draw", { seat, tile, left: game.pile.length });

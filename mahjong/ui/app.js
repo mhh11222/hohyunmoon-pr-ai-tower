@@ -10,7 +10,7 @@ import {
 } from "../src/game.js";
 import { makeBot, botContext, LEVEL, LEVEL_INFO } from "../src/bot.js";
 import { isWinningHand } from "../src/hand.js";
-import { tileName, SEATS } from "../src/tiles.js";
+import { tileName, SEATS, sortTiles } from "../src/tiles.js";
 import { coachHand, tileNote, mnemonic, MNEMONICS } from "./coach.js";
 import { RULE_CARDS, cardHTML } from "./rulecards.js";
 import { seatCats, emoteFor } from "./cats.js";
@@ -23,13 +23,13 @@ import { createAudio, SHOUTS } from "./sound.js";
 export const MODES = {
   learn: {
     key: "learn", name: "학습 모드", guide: true, coach: true, undo: true,
-    botDelay: 1100, callDelay: 700,
-    speed: 1.8, // 3D 모션을 늦춰 실제로 따라할 수 있게
+    botDelay: 1300, callDelay: 800,
+    speed: 2.4, // 3D 모션을 크게 늦춰 실제로 따라할 수 있게
   },
   real: {
     key: "real", name: "실전 모드", guide: false, coach: false, undo: false,
-    botDelay: 420, callDelay: 260,
-    speed: 1,
+    botDelay: 500, callDelay: 300,
+    speed: 1.25,
   },
 };
 
@@ -61,6 +61,8 @@ const state = {
   pending: null,   // 일시정지 중 밀린 진행
   undoStack: [],
   timer: null,
+  drag: null,          // 길게 눌러 옮기는 중인 패 { index }
+  suppressClick: false,
   table: null,      // 3D 테이블 (없으면 2D로 돈다)
   use3D: false,
   sound: null,
@@ -149,7 +151,16 @@ async function ceremony() {
     return step();
   }
   const ordinal = ["", "한", "두", "세", "네"];
+  const who = (seat) => (seat === state.human ? "나" : state.cats[seat]?.name ?? `${seat}번`);
   const stageText = (name, payload) => {
+    if (name === "dealerRoll" && payload) {
+      const [a, b] = payload.dice;
+      return [
+        `먼저 <b>첫 딜러</b>를 뽑습니다. 주사위 <b>${a}+${b}=${payload.sum}</b> — 나부터 반시계로 ` +
+          `${payload.sum}번째 자리… <b>${who(g.dealerIndex)}</b>가 첫 딜러(동)입니다.`,
+        `딜러 뽑기 — ${who(g.dealerIndex)}`,
+      ];
+    }
     if (name === "shuffle") return ["패를 전부 엎어 <b>휘휘 섞습니다</b>. 실제로는 두 손으로 크게 원을 그리며 섞으세요.", "섞는 중"];
     if (name === "wall") return [
       `섞은 패를 <b>2단으로 쌓아 산(벽)</b>을 만듭니다. ${g.playerCount}인이니 벽 ${g.playerCount}개 — ` +
@@ -159,19 +170,21 @@ async function ceremony() {
     if (name === "camera") return ["산이 다 섰습니다. 이제 자리에 앉아 <b>상대를 마주 보고</b> 칩니다.", "착석"];
     if (name === "dice" && payload) {
       const [a, b] = payload.dice;
+      const wallOwner = who(payload.opening.wallIndex);
       return [
-        `딜러가 주사위를 굴려 <b>${a}+${b}=${payload.sum}</b> — 딜러부터 반시계로 ${payload.sum}자리를 세어 벽을 고르고, ` +
-          `그 벽 오른쪽 끝에서 ${payload.sum}번째 벽돌 뒤가 <b>입구</b>가 됩니다. 뽑기는 여기서 시작합니다.`,
-        `주사위 ${a}+${b}=${payload.sum}`,
+        `딜러 <b>${who(g.dealerIndex)}</b>가 주사위를 굴려 <b>${a}+${b}=${payload.sum}</b> — 딜러 자신부터 반시계로 ` +
+          `${payload.sum}자리를 세면 <b>${wallOwner}의 벽</b>. 그 벽 오른쪽 끝에서 ${payload.sum}번째 벽돌 뒤가 ` +
+          `<b>산의 입구</b>가 되고, 패는 여기서부터 뗍니다.`,
+        `주사위 ${a}+${b}=${payload.sum} → ${wallOwner}의 벽`,
       ];
     }
     if (name === "dealRound" && payload) {
       return [
-        `<b>${ordinal[payload.round]} 바퀴째</b> — 딜러부터 차례로 입구에서 <b>벽돌 2개(4장)씩</b> 가져갑니다.`,
+        `<b>${ordinal[payload.round]} 바퀴째</b> — 딜러 ${who(g.dealerIndex)}부터 반시계 차례로 입구에서 <b>벽돌 2개(4장)씩</b> 가져갑니다.`,
         `배패 ${payload.round}/4바퀴`,
       ];
     }
-    if (name === "dealExtra") return ["4바퀴가 끝나면 <b>딜러만 1장 더</b> — 딜러 17장, 나머지 16장.", "딜러 +1장"];
+    if (name === "dealExtra") return [`4바퀴가 끝나면 <b>딜러 ${who(g.dealerIndex)}만 1장 더</b> — 딜러 17장, 나머지 16장.`, "딜러 +1장"];
     return [];
   };
   state.buttons = [];
@@ -438,6 +451,19 @@ function updateTools() {
     { label: state.sfx ? "🔊" : "🔇", style: "chip", onClick: toggleSfx },
     { label: "?", style: "chip", onClick: helpSheet },
   ];
+  const me = state.game?.players?.[state.human];
+  if (me && me.autoSort === false) {
+    tools.splice(1, 0, {
+      label: "⇅ 정렬",
+      style: "chip",
+      onClick: () => {
+        me.concealed = sortTiles(me.concealed);
+        me.autoSort = true;
+        state.flash = "다시 <b>자동 정렬</b>합니다. 길게 눌러 끌면 언제든 직접 배열로 바뀝니다.";
+        step();
+      },
+    });
+  }
   if (state.mode.undo) {
     tools.splice(1, 0, {
       label: "↩ 한 수",
@@ -549,7 +575,20 @@ function finishHand() {
   const showResult = () => sheet(resultSheet(g, state.human, state.mode.guide), [
     last
       ? { label: "최종 정산", style: "hot", onClick: showFinal }
-      : { label: "다음 판", style: "hot", onClick: () => { nextHand(g); hideSheet(); ceremony(); } },
+      : { label: "다음 판", style: "hot", onClick: () => {
+          const prevDealer = g.dealerIndex;
+          const winner = g.result?.winner ?? null;
+          nextHand(g);
+          const who = (seat) => (seat === state.human ? "나" : state.cats[seat]?.name ?? `${seat}번`);
+          state.flash =
+            winner === null
+              ? `무승부라 딜러는 <b>${who(g.dealerIndex)}</b> 그대로입니다.`
+              : winner === prevDealer
+                ? `딜러 <b>${who(prevDealer)}</b>가 이겨서 딜러를 유지합니다.`
+                : `<b>${who(winner)}</b>가 이겨서 딜러가 오른쪽 <b>${who(g.dealerIndex)}</b>에게 넘어갑니다.`;
+          hideSheet();
+          ceremony();
+        } },
   ]);
   if (t) setTimeout(showResult, 1400); else showResult();
 }
@@ -660,6 +699,7 @@ function onClick(event) {
   if (sheetBtn) return state.sheetButtons?.[Number(sheetBtn.dataset.sheet)]?.onClick?.();
 
   const tile = event.target.closest("#myHand .tile");
+  if (tile && state.suppressClick) { state.suppressClick = false; return; }
   if (tile && state.game?.phase === PHASE.DISCARD && state.game.turn === state.human) {
     const index = Number(tile.dataset.index);
     if (state.picked?.index === index) return doDiscard();
@@ -685,8 +725,65 @@ function swipe() {
   }, { passive: true });
 }
 
+/* ── 손패 길게 눌러 재배열 ──────────────────────────── */
+
+function handTiles() {
+  return [...document.querySelectorAll("#myHand .tile")];
+}
+
+function startDrag(index, el) {
+  state.drag = { index, moved: false };
+  el.classList.add("dragging");
+  navigator.vibrate?.(12);
+}
+
+function onPointerDown(e) {
+  const tile = e.target.closest("#myHand .tile");
+  if (!tile || !state.game) return;
+  const index = Number(tile.dataset.index);
+  clearTimeout(state.pressTimer);
+  state.pressTimer = setTimeout(() => startDrag(index, tile), 260);
+}
+
+function onPointerMove(e) {
+  if (!state.drag) return;
+  e.preventDefault();
+  const under = document.elementFromPoint(e.clientX, e.clientY)?.closest?.("#myHand .tile");
+  if (!under) return;
+  const target = Number(under.dataset.index);
+  if (target === state.drag.index) return;
+  const hand = state.game.players[state.human].concealed;
+  const [moving] = hand.splice(state.drag.index, 1);
+  hand.splice(target, 0, moving);
+  state.drag.index = target;
+  state.drag.moved = true;
+  render(state);
+  handTiles()[target]?.classList.add("dragging");
+}
+
+function onPointerUp() {
+  clearTimeout(state.pressTimer);
+  if (!state.drag) return;
+  const moved = state.drag.moved;
+  handTiles().forEach((el) => el.classList.remove("dragging"));
+  state.drag = null;
+  state.suppressClick = true; // 끌기 끝의 클릭이 '버리기 선택'으로 새지 않게
+  if (moved) {
+    const me = state.game.players[state.human];
+    if (me.autoSort !== false) {
+      me.autoSort = false;
+      state.flash = "이제 <b>직접 배열</b>입니다 — 뽑은 패는 맨 오른쪽에 옵니다. 자동으로 돌아가려면 ⇅ 정렬.";
+    }
+    step();
+  }
+}
+
 export function boot() {
   document.addEventListener("click", onClick);
+  document.addEventListener("pointerdown", onPointerDown);
+  document.addEventListener("pointermove", onPointerMove, { passive: false });
+  document.addEventListener("pointerup", onPointerUp);
+  document.addEventListener("pointercancel", onPointerUp);
   swipe();
   showRuleCard(0);
 }
