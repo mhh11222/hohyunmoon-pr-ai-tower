@@ -8,7 +8,7 @@ import {
   createGame, startHand, nextHand, draw, discard, resolveDiscard, declareWin,
   snapshotGame, restoreGame, seenCounts, PHASE,
 } from "../src/game.js";
-import { makeBot } from "../src/bot.js";
+import { makeBot, botContext, LEVEL, LEVEL_INFO } from "../src/bot.js";
 import { isWinningHand } from "../src/hand.js";
 import { tileName, SEATS } from "../src/tiles.js";
 import { coachHand, tileNote, mnemonic, MNEMONICS } from "./coach.js";
@@ -40,6 +40,7 @@ const state = {
   ruleCard: null,   // 룰 카드를 넘겨 보는 중이면 몇 번째인지
   cats: [],         // seat → 고양이 (내 자리는 null)
   emotes: {},       // seat → 지금 띄운 말풍선
+  setup: { playerCount: 2, level: LEVEL.BEGINNER, extendedBonuses: false, allowKong: false },
   pending: null,   // 일시정지 중 밀린 진행
   undoStack: [],
   timer: null,
@@ -90,13 +91,18 @@ async function prepare() {
   }
 }
 
-async function newGame(mode, playerCount = 2, rounds = 4) {
+async function newGame(mode) {
+  const { playerCount, level, extendedBonuses, allowKong } = state.setup;
   state.mode = mode;
-  state.rounds = rounds;
+  state.rounds = playerCount === 4 ? 4 : 4;
   state.paused = false;
   state.undoStack = [];
-  state.game = createGame({ playerCount, seed: (Date.now() % 1e9) | 0 });
-  state.bots = Array.from({ length: playerCount }, () => makeBot());
+  state.game = createGame({
+    playerCount,
+    seed: (Date.now() % 1e9) | 0,
+    options: { extendedBonuses, allowKong },
+  });
+  state.bots = Array.from({ length: playerCount }, () => makeBot(level));
   state.cats = seatCats(playerCount, state.human);
   state.emotes = {};
   startHand(state.game);
@@ -291,7 +297,7 @@ function botTurn() {
   if (g.phase !== PHASE.DISCARD) return step();
 
   if (bot.wantsWin(p)) { declareWin(g, seat); return step(); }
-  const tile = bot.discard(p);
+  const tile = bot.discard(p, botContext(g, seat));
   say(`${seatLabel(g, seat)}가 <b>${tileName(tile)}</b>를 버렸습니다.`, `${seatLabel(g, seat)} → ${tileName(tile)}`);
   table()?.discardTile(seat, tile, state.human);
   discard(g, tile);
@@ -496,26 +502,46 @@ function showFinal() {
 /* ── 시작 화면 ──────────────────────────────────────── */
 
 function setupSheet() {
+  const { playerCount, level, extendedBonuses, allowKong } = state.setup;
+  const catLine = { 2: "포도가 상대합니다", 3: "감자·포도가 상대합니다", 4: "포도·감자·막내 셋 다 나옵니다" }[playerCount];
+  const pick = (cond) => (cond ? "picked" : "");
   sheet(
     `<h2>대만마작 학습용 게임</h2>
-     <p>내 세트 기준입니다. 4인 140장 · 3인 104장(만자 빼고) · 2인 100장(만자·꽃 빼고).<br>
-     손패 16장, 딜러 17장. <b>묶음 3장짜리 5개 + 짝 1개</b>를 만들면 이깁니다.</p>
-     <p class="hint">모드는 게임 중에도 위쪽 배지를 눌러 바꿀 수 있습니다.
-     지금은 2인 판이고, 3·4인은 STEP E에서 열립니다.</p>`,
+     <p>손패 16장, 딜러 17장. <b>묶음 3장짜리 5개 + 짝 1개</b>를 만들면 이깁니다.</p>
+     <div class="optrow"><span class="optlabel">인원</span>
+       ${[2, 3, 4].map((n) => `<button class="opt ${pick(playerCount === n)}" data-set="playerCount:${n}">${n}인</button>`).join("")}
+     </div>
+     <p class="hint optnote">🐈 ${catLine} · ${playerCount === 4 ? "140장 전부" : playerCount === 3 ? "만자를 빼고 104장" : "만자·꽃을 빼고 100장"}</p>
+     <div class="optrow"><span class="optlabel">봇 난이도</span>
+       ${LEVEL_INFO.map((l) => `<button class="opt ${pick(level === l.key)}" data-set="level:${l.key}">${l.name}</button>`).join("")}
+     </div>
+     <p class="hint optnote">${LEVEL_INFO.find((l) => l.key === level).desc}</p>
+     <div class="optrow"><span class="optlabel">규칙</span>
+       <button class="opt ${pick(extendedBonuses)}" data-set="extendedBonuses:!">확장 보너스</button>
+       <button class="opt ${pick(allowKong)}" data-set="allowKong:!">깡</button>
+     </div>
+     <p class="hint optnote">확장 보너스 = 混一色·碰碰胡·清一色·大三元… 익숙해지면 켜세요. 깡도 옵션입니다.</p>`,
     [
       {
-        label: `<b>🎓 학습 모드</b><span>매 단계 자막 · 손패 코치(몇 묶음 됐는지·무엇을 버릴지)
-                · 텐파이 대기패 표시 · 연상 고리 · 한 수 물리기</span>`,
+        label: `<b>🎓 학습 모드</b><span>매 단계 자막 · 손패 코치 · 텐파이 표시 · 연상 고리 · 한 수 물리기</span>`,
         style: "card hot",
-        onClick: () => newGame(MODES.learn, 2, 4),
+        onClick: () => newGame(MODES.learn),
       },
       {
         label: `<b>⚡ 실전 모드</b><span>힌트 없이 빠르게. 누가 무엇을 버렸는지만 알려줍니다.</span>`,
         style: "card",
-        onClick: () => newGame(MODES.real, 2, 4),
+        onClick: () => newGame(MODES.real),
       },
     ]
   );
+}
+
+/** 시작 화면의 옵션 버튼 */
+function onSetupOption(button) {
+  const [key, raw] = button.dataset.set.split(":");
+  if (raw === "!") state.setup[key] = !state.setup[key];
+  else state.setup[key] = key === "playerCount" ? Number(raw) : raw;
+  setupSheet();
 }
 
 /* ── 입력 ───────────────────────────────────────────── */
@@ -532,6 +558,9 @@ function onClick(event) {
 
   const actionBtn = event.target.closest("#actions button");
   if (actionBtn) return state.buttons[Number(actionBtn.dataset.idx)]?.onClick?.();
+
+  const optBtn = event.target.closest("#overlay button.opt");
+  if (optBtn) return onSetupOption(optBtn);
 
   const sheetBtn = event.target.closest("#overlay button");
   if (sheetBtn) return state.sheetButtons?.[Number(sheetBtn.dataset.sheet)]?.onClick?.();

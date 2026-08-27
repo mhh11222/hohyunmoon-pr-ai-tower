@@ -1,20 +1,19 @@
 // 3D 테이블 — three.js. 규칙은 하나도 모르고, "이런 모션을 보여 달라"는 주문만 받는다.
 //
-// 좌표: 카메라는 +z 쪽(내 자리)에서 테이블을 내려다본다.
-//   -z 상대 자리   +z 내 자리   y 위쪽
-// 패는 눕힌 상자. 윗면(+Y)이 얼굴, 아랫면(-Y)이 초록 뒷면이다.
+// 좌표: 카메라는 +z 쪽(내 자리)에서 테이블을 내려다본다. y가 위쪽.
+// 자리 배치는 회전으로 푼다: 내 자리(side 0)를 기준 틀로 두고,
+// side s는 기준 좌표를 s × (360°/인원수) 만큼 돌려서 앉힌다.
+//   4인: 아래(나)·오른쪽·위·왼쪽  /  3인: 아래·오른위·왼위  /  2인: 아래·위
+// 패는 눕힌 상자. 윗면(+Y)이 얼굴, 아랫면이 대나무 등판이다.
 
 import { Timeline, tween, lerp, arc, easeOutCubic, easeInOutQuad } from "./anim.js";
 import { faceCanvas, diceCanvas } from "./tiletexture.js";
 
 const TILE = { w: 0.068, h: 0.095, d: 0.046 };
-const TABLE = { w: 2.3, d: 2.1 };
+const TABLE = { w: 2.4, d: 2.4 };
 
-/** 자리별 구역 (2인 기준: 0 = 나(+z), 1 = 상대(-z)) */
-const ZONES = [
-  { hand: 0.74, wall: 0.56, meld: 0.38, river: 0.1, dir: 1, sticks: [0.84, 0.54] },
-  { hand: -0.74, wall: -0.56, meld: -0.38, river: -0.14, dir: -1, sticks: [-0.84, -0.54] },
-];
+// 기준 틀(내 자리, 아래쪽)에서의 거리들
+const BASE = { hand: 0.8, wall: 0.58, meld: 0.38, river: 0.13, sticks: [0.9, 0.56] };
 
 /** 그 눈이 위를 보게 하는 회전 (면 배치 [3,4,1,6,2,5] 기준) */
 const UP_ROTATION = {
@@ -45,18 +44,18 @@ export async function createTable(canvas, { sound = null } = {}) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 40);
-  camera.position.set(0, 1.78, 1.12);
-  camera.lookAt(0, 0, -0.06);
+  camera.position.set(0, 1.82, 1.18);
+  camera.lookAt(0, 0, -0.08);
 
   scene.add(new THREE.HemisphereLight(0xdfeee6, 0x0a2a1f, 0.9));
   const key = new THREE.DirectionalLight(0xfff6e0, 1.35);
   key.position.set(-1.1, 2.7, 1.2);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
-  key.shadow.camera.left = -1.6;
-  key.shadow.camera.right = 1.6;
-  key.shadow.camera.top = 1.6;
-  key.shadow.camera.bottom = -1.6;
+  key.shadow.camera.left = -1.7;
+  key.shadow.camera.right = 1.7;
+  key.shadow.camera.top = 1.7;
+  key.shadow.camera.bottom = -1.7;
   key.shadow.camera.near = 0.5;
   key.shadow.camera.far = 6;
   key.shadow.bias = -0.0015;
@@ -73,10 +72,30 @@ export async function createTable(canvas, { sound = null } = {}) {
   felt.receiveShadow = true;
   scene.add(felt);
 
-  const rimGeo = new THREE.BoxGeometry(TABLE.w + 0.16, 0.07, TABLE.d + 0.16);
-  const rimMesh = new THREE.Mesh(rimGeo, new THREE.MeshStandardMaterial({ color: 0x0c3627, roughness: 0.6 }));
+  const rimMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(TABLE.w + 0.16, 0.07, TABLE.d + 0.16),
+    new THREE.MeshStandardMaterial({ color: 0x0c3627, roughness: 0.6 })
+  );
   rimMesh.position.y = -0.05;
   scene.add(rimMesh);
+
+  /* ── 자리 회전 ────────────────────────────────────── */
+
+  let sideCount = 2; // newHand에서 인원수로 바뀐다
+
+  function sideAngle(side) {
+    return (side * Math.PI * 2) / sideCount;
+  }
+
+  /** 기준 틀 좌표 → side 자리로 회전 */
+  function orient(x, y, z, side) {
+    const a = sideAngle(side);
+    return new THREE.Vector3(
+      x * Math.cos(a) + z * Math.sin(a),
+      y,
+      -x * Math.sin(a) + z * Math.cos(a)
+    );
+  }
 
   /* ── 재료 ─────────────────────────────────────────── */
 
@@ -112,11 +131,6 @@ export async function createTable(canvas, { sound = null } = {}) {
     return mesh;
   }
 
-  /** 산에서 한 장 — 입구(앞)에서부터 */
-  function takeFromWall() {
-    return wallTiles.shift();
-  }
-
   function recycle(mesh) {
     scene.remove(mesh);
     pool.push(mesh);
@@ -132,7 +146,6 @@ export async function createTable(canvas, { sound = null } = {}) {
     const group = new THREE.Group();
     const mat = isPaw ? pawMat : skinMat;
     if (isPaw) {
-      // 고양이 앞발 — 둥근 발과 발가락 세 개
       const paw = new THREE.Mesh(new THREE.SphereGeometry(0.062, 12, 10), mat);
       paw.scale.set(1, 0.62, 1.15);
       group.add(paw);
@@ -146,7 +159,6 @@ export async function createTable(canvas, { sound = null } = {}) {
       leg.position.set(0, 0.1, 0.2);
       group.add(leg);
     } else {
-      // 사람 손 — 손바닥, 손가락 네 개, 엄지
       const palm = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.032, 0.12), mat);
       group.add(palm);
       for (let i = 0; i < 4; i++) {
@@ -165,38 +177,40 @@ export async function createTable(canvas, { sound = null } = {}) {
       wrist.position.set(0, 0.03, 0.17);
       group.add(wrist);
     }
-    group.traverse((m) => { if (m.isMesh) { m.castShadow = true; } });
+    group.traverse((m) => { if (m.isMesh) m.castShadow = true; });
     group.visible = false;
     scene.add(group);
     return group;
   }
 
-  const HAND_REST = [new THREE.Vector3(0.3, 0.42, 1.5), new THREE.Vector3(-0.3, 0.42, -1.5)];
-  const hands3d = [buildHand(false), buildHand(true)];
-  hands3d[1].rotation.y = Math.PI; // 상대 발은 반대쪽에서 들어온다
+  let hands3d = []; // side마다 하나 — newHand에서 만든다
+
+  function handRest(side) {
+    return orient(0.3, 0.42, 1.5, side);
+  }
 
   /**
-   * 손이 from까지 와서 mesh를 집고 to에 놓고 물러난다.
-   * mesh가 null이면 빈손 동작(주사위 던지기 등).
+   * side의 손이 나타나 mesh를 집어 to에 놓고 물러난다.
+   * mesh가 null이면 빈손 동작.
    */
   function handCarry(side, mesh, to, { duration = 0.55, height = 0.14, grabAt = null, onDone = null } = {}) {
     const hand = hands3d[side];
-    const rest = HAND_REST[side];
-    const lift = 0.075; // 손바닥 아래 패가 붙는 높이
+    if (!hand) { if (mesh) mesh.position.copy(to); onDone?.(); return; }
+    const rest = handRest(side);
+    const lift = 0.075;
     const from = grabAt ? grabAt.clone() : (mesh ? mesh.position.clone() : to.clone());
     const reach = duration * 0.45;
     const carry = duration * 0.55;
     hand.visible = true;
     hand.position.copy(rest);
+    hand.rotation.y = sideAngle(side) + (side === 0 ? 0 : Math.PI);
 
-    // 1) 빈손이 패 있는 곳까지
     timeline.add(tween({
       duration: reach, ease: easeOutCubic,
       onUpdate: (t) => {
         hand.position.lerpVectors(rest, new THREE.Vector3(from.x, from.y + lift, from.z), t);
       },
     }));
-    // 2) 집어서 목적지로 — 패가 손을 따라간다
     timeline.add(tween({
       duration: carry, delay: reach, ease: easeInOutQuad,
       onUpdate: (t) => {
@@ -211,7 +225,6 @@ export async function createTable(canvas, { sound = null } = {}) {
         sound?.sfx?.clack?.(0, { gain: 0.7 });
       },
     }));
-    // 3) 빈손이 물러난다
     timeline.add(tween({
       duration: 0.32, delay: reach + carry, ease: easeOutCubic,
       onUpdate: (t) => {
@@ -224,13 +237,15 @@ export async function createTable(canvas, { sound = null } = {}) {
   /* ── 상태 ─────────────────────────────────────────── */
 
   const timeline = new Timeline();
-  const wallTiles = [];      // 산 — 뽑기 순서대로
-  const rivers = [[], []];   // 버림패
-  const melds = [[], []];    // 공개 묶음
-  const hands = [[], []];    // 상대 손패(뒷면)
-  const sticks = [];
+  let wallTiles = [];   // 산 — 뽑기 순서대로
+  let rivers = [];      // side → 버림패
+  let melds = [];       // side → 공개 묶음 패들
+  let hands = [];       // side → 상대 손패(뒷면)
   let dice = [];
   let winSpread = [];
+  const sticks = [];
+  let humanSide = 0;
+  let seatSide = (seat) => seat; // newHand에서 실제 매핑으로 바뀐다
   let running = false;
   let last = 0;
 
@@ -253,55 +268,53 @@ export async function createTable(canvas, { sound = null } = {}) {
     );
   }
 
-  /* ── 배치 ─────────────────────────────────────────── */
+  /* ── 배치 (기준 틀 → 회전) ────────────────────────── */
 
-  function riverSpot(seat, index) {
-    const perRow = 8;
+  function riverSpot(side, index) {
+    const perRow = 7;
     const row = Math.floor(index / perRow);
     const col = index % perRow;
-    const zone = ZONES[seat];
-    return new THREE.Vector3(
+    return orient(
       (col - (perRow - 1) / 2) * (TILE.w + 0.012),
       TILE.d / 2,
-      zone.river + row * (TILE.h + 0.012) * zone.dir * -1
+      BASE.river + row * (TILE.h + 0.012),
+      side
     );
   }
 
-  function meldSpot(seat, meldIndex, tileIndex) {
-    const zone = ZONES[seat];
-    const groupX = -0.66 + meldIndex * (TILE.w * 3.3);
-    return new THREE.Vector3(
-      (groupX + tileIndex * (TILE.w + 0.004)) * zone.dir,
-      TILE.d / 2,
-      zone.meld
-    );
+  function meldSpot(side, meldIndex, tileIndex) {
+    const groupX = -0.62 + meldIndex * (TILE.w * 3.3);
+    return orient(groupX + tileIndex * (TILE.w + 0.004), TILE.d / 2, BASE.meld, side);
   }
 
   function wallSpot(index, total) {
-    // 두 벽으로 나눠 2단으로 쌓는다
-    const perWall = Math.ceil(total / 2);
-    const wall = index < perWall ? 0 : 1;
+    const perWall = Math.ceil(total / sideCount);
+    const wall = Math.min(Math.floor(index / perWall), sideCount - 1);
     const within = index - wall * perWall;
     const stacks = Math.ceil(perWall / 2);
     const stackIndex = Math.floor(within / 2);
     const tier = within % 2 === 0 ? 1 : 0; // 위 칸 먼저 뽑는다
-    const zone = ZONES[wall === 0 ? 1 : 0];
-    const spread = Math.min(TILE.w + 0.006, 2.5 / stacks);
-    return new THREE.Vector3(
-      (stackIndex - (stacks - 1) / 2) * spread * (wall === 0 ? 1 : -1),
+    const spread = Math.min(TILE.w + 0.006, 1.06 / stacks);
+    return orient(
+      (stackIndex - (stacks - 1) / 2) * spread,
       TILE.d / 2 + tier * TILE.d,
-      zone.wall
+      BASE.wall,
+      wall
     );
   }
 
-  function handSpot(seat, index, count) {
-    const zone = ZONES[seat];
-    const spread = Math.min(TILE.w + 0.004, 2.0 / Math.max(count, 1));
-    return new THREE.Vector3(
-      (index - (count - 1) / 2) * spread * zone.dir,
-      TILE.h / 2,
-      zone.hand
-    );
+  function handSpot(side, index, count) {
+    const spread = Math.min(TILE.w + 0.004, 1.5 / Math.max(count, 1));
+    return orient((index - (count - 1) / 2) * spread, TILE.h / 2, BASE.hand, side);
+  }
+
+  function stickSpot(side, i) {
+    return orient(BASE.sticks[0] - 0.5, 0.02, BASE.sticks[1] + i * 0.035, side);
+  }
+
+  /** 패를 그 자리 방향으로 돌려 놓는다 */
+  function faceSide(mesh, side, tilt = 0) {
+    mesh.rotation.set(tilt, sideAngle(side), 0);
   }
 
   /* ── 모션 ─────────────────────────────────────────── */
@@ -319,6 +332,17 @@ export async function createTable(canvas, { sound = null } = {}) {
   /** 섞기 → 산 쌓기 → 주사위 → 배패 */
   async function newHand(game, { humanSeat = 0, onStage = null } = {}) {
     clearHand();
+    sideCount = game.playerCount;
+    humanSide = 0;
+    seatSide = (seat) => (seat - humanSeat + sideCount) % sideCount;
+    camera.position.set(0, sideCount >= 3 ? 2.0 : 1.82, sideCount >= 3 ? 1.3 : 1.18);
+    camera.lookAt(0, 0, -0.08);
+    rivers = Array.from({ length: sideCount }, () => []);
+    melds = Array.from({ length: sideCount }, () => []);
+    hands = Array.from({ length: sideCount }, () => []);
+    for (const hand of hands3d) scene.remove(hand);
+    hands3d = Array.from({ length: sideCount }, (_, s) => buildHand(s !== 0));
+
     onStage?.("shuffle");
     const total = game.pile.length + game.players.reduce(
       (n, p) => n + p.concealed.length + p.flowers.length, 0
@@ -351,47 +375,45 @@ export async function createTable(canvas, { sound = null } = {}) {
     await settle();
     for (const mesh of swirl) recycle(mesh);
 
-    // 2) 산 쌓기 — 2단으로
+    // 2) 산 쌓기 — 인원수만큼의 벽을 2단으로
     onStage?.("wall");
     for (let i = 0; i < total; i++) {
       const mesh = makeTile(null);
       const to = wallSpot(i, total);
       mesh.position.set(0, 0.5, 0);
-      mesh.visible = true;
+      faceSide(mesh, Math.min(Math.floor(i / Math.ceil(total / sideCount)), sideCount - 1));
       wallTiles.push(mesh);
-      move(mesh, to, { duration: 0.34, delay: i * 0.006, height: 0.05, onDone: i % 9 === 0 ? say : undefined });
+      move(mesh, to, { duration: 0.34, delay: i * 0.005, height: 0.05, onDone: i % 9 === 0 ? say : undefined });
     }
     await settle();
 
-    // 3) 주사위
+    // 3) 주사위 — 딜러 손이 던진다
     const roll = game.log.find((e) => e.type === "dice");
-    if (roll) { onStage?.("dice", roll); await rollDice(roll.dice, 0); }
+    if (roll) { onStage?.("dice", roll); await rollDice(roll.dice, seatSide(game.dealerIndex)); }
 
-    // 4) 배패 — 상대 손패는 뒷면으로 세워 놓고, 내 몫은 화면 아래(내 손)로 내려간다
+    // 4) 배패 — 상대들 손패는 뒷면으로 세워 놓고, 내 몫은 화면 아래로
     onStage?.("deal");
     sound?.sfx?.clack?.(0, { gain: 0.5 });
-    const opponent = game.players.find((p) => p.seat !== humanSeat);
-    const opponentSeat = opponent ? 1 : 1;
-    const count = opponent ? opponent.concealed.length : 16;
-    for (let i = 0; i < count; i++) {
-      const mesh = takeFromWall();
-      if (!mesh) break;
-      hands[opponentSeat].push(mesh);
-      mesh.rotation.x = -Math.PI / 2.2;
-      move(mesh, handSpot(opponentSeat, i, count), { duration: 0.3, delay: i * 0.03, height: 0.2 });
-      if (i % 4 === 0) sound?.sfx?.clack?.(i * 0.03, { gain: 0.4 });
-    }
-    const mine = game.players[humanSeat].concealed.length;
-    for (let i = 0; i < mine; i++) {
-      const mesh = takeFromWall();
-      if (!mesh) break;
-      move(mesh, new THREE.Vector3((i - mine / 2) * 0.05, 0.02, 1.5), {
-        duration: 0.36,
-        delay: i * 0.03,
-        height: 0.24,
-        onDone: () => recycle(mesh),
-      });
-      if (i % 4 === 0) sound?.sfx?.clack?.(i * 0.03, { gain: 0.45 });
+    let delay = 0;
+    for (const player of game.players) {
+      const side = seatSide(player.seat);
+      const count = player.concealed.length;
+      for (let i = 0; i < count; i++) {
+        const mesh = takeFromWall();
+        if (!mesh) break;
+        if (side === 0) {
+          move(mesh, orient((i - count / 2) * 0.05, 0.02, 1.5, 0), {
+            duration: 0.36, delay: delay + i * 0.02, height: 0.24,
+            onDone: () => recycle(mesh),
+          });
+        } else {
+          hands[side].push(mesh);
+          faceSide(mesh, side, -Math.PI / 2.2);
+          move(mesh, handSpot(side, i, count), { duration: 0.3, delay: delay + i * 0.02, height: 0.2 });
+        }
+        if (i % 4 === 0) sound?.sfx?.clack?.(delay + i * 0.02, { gain: 0.4 });
+      }
+      delay += count * 0.02 + 0.15;
     }
     await settle();
     parkDice();
@@ -413,17 +435,20 @@ export async function createTable(canvas, { sound = null } = {}) {
     dice = [];
     // 던지는 손 — 짧게 나타나 흔들고 사라진다
     const hand = hands3d[dealerSide];
-    const rest = HAND_REST[dealerSide];
-    hand.visible = true;
-    hand.position.copy(rest);
-    timeline.add(tween({
-      duration: 0.5, ease: easeInOutQuad,
-      onUpdate: (t) => {
-        hand.position.lerpVectors(rest, new THREE.Vector3(0, 0.45, dealerSide === 0 ? 0.45 : -0.45), Math.min(1, t * 2));
-        if (t > 0.5) hand.rotation.x = Math.sin((t - 0.5) * Math.PI * 4) * 0.5;
-      },
-      onDone: () => { hand.rotation.x = 0; hand.visible = false; },
-    }));
+    if (hand) {
+      const rest = handRest(dealerSide);
+      hand.visible = true;
+      hand.position.copy(rest);
+      const target = orient(0, 0.45, 0.45, dealerSide);
+      timeline.add(tween({
+        duration: 0.5, ease: easeInOutQuad,
+        onUpdate: (t) => {
+          hand.position.lerpVectors(rest, target, Math.min(1, t * 2));
+          if (t > 0.5) hand.rotation.x = Math.sin((t - 0.5) * Math.PI * 4) * 0.5;
+        },
+        onDone: () => { hand.rotation.x = 0; hand.visible = false; },
+      }));
+    }
     sound?.sfx?.dice?.();
     const geo = new THREE.BoxGeometry(0.09, 0.09, 0.09);
     values.forEach((value, i) => {
@@ -434,6 +459,7 @@ export async function createTable(canvas, { sound = null } = {}) {
         return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35 });
       });
       const die = new THREE.Mesh(geo, faces);
+      die.castShadow = true;
       die.position.set(-0.4 + i * 0.8, 0.6, 0.1);
       scene.add(die);
       dice.push(die);
@@ -458,12 +484,16 @@ export async function createTable(canvas, { sound = null } = {}) {
     return settle();
   }
 
+  /** 산에서 한 장 — 입구(앞)에서부터 */
+  function takeFromWall() {
+    return wallTiles.shift();
+  }
+
   /** 상대 손패 줄 맞추기 */
   function reflowHand(side) {
     const list = hands[side];
     list.forEach((mesh, i) => {
-      const to = handSpot(side, i, list.length);
-      move(mesh, to, { duration: 0.18, height: 0.01 });
+      move(mesh, handSpot(side, i, list.length), { duration: 0.18, height: 0.01 });
     });
   }
 
@@ -471,11 +501,15 @@ export async function createTable(canvas, { sound = null } = {}) {
   function drawTile(seat, humanSeat = 0) {
     const mesh = takeFromWall();
     if (!mesh) return;
-    const side = seat === humanSeat ? 0 : 1;
+    const side = seatSide(seat);
     const to = side === 0
-      ? new THREE.Vector3(0, 0.02, 1.45)
-      : handSpot(1, hands[1].length, hands[1].length + 1);
-    if (side === 1) { hands[1].push(mesh); reflowHand(1); }
+      ? orient(0, 0.02, 1.45, 0)
+      : handSpot(side, hands[side].length, hands[side].length + 1);
+    if (side !== 0) {
+      hands[side].push(mesh);
+      faceSide(mesh, side, -Math.PI / 2.2);
+      reflowHand(side);
+    }
     handCarry(side, mesh, to, {
       duration: 0.5,
       height: 0.16,
@@ -485,28 +519,28 @@ export async function createTable(canvas, { sound = null } = {}) {
 
   /** 버리기 — 손이 강에 패를 내려놓는다, 얼굴을 위로 */
   function discardTile(seat, tile, humanSeat = 0) {
-    const side = seat === humanSeat ? 0 : 1;
-    const zone = ZONES[side];
+    const side = seatSide(seat);
     const mesh = makeTile(tile);
     const index = rivers[side].length;
-    mesh.position.set(0, 0.02, zone.hand * 0.9);
+    mesh.position.copy(orient(0, 0.02, BASE.hand * 0.9, side));
+    faceSide(mesh, side);
     rivers[side].push(mesh);
-    if (side === 1 && hands[1].length) { recycle(hands[1].pop()); reflowHand(1); }
+    if (side !== 0 && hands[side].length) { recycle(hands[side].pop()); reflowHand(side); }
     handCarry(side, mesh, riverSpot(side, index), { duration: 0.5, height: 0.13 });
   }
 
   /** 부르기 — 방금 버려진 패가 묶음 자리로 날아가고 나머지가 함께 눕는다 */
   function meldTiles(seat, tiles, fromSeat, humanSeat = 0) {
-    const side = seat === humanSeat ? 0 : 1;
-    const fromSide = fromSeat === humanSeat ? 0 : 1;
+    const side = seatSide(seat);
+    const fromSide = seatSide(fromSeat);
     const taken = rivers[fromSide].pop();
     if (taken) recycle(taken);
-    const meldIndex = melds[side].length;
-    const group = [];
+    const meldIndex = Math.floor(melds[side].length / 3);
     tiles.forEach((tile, i) => {
       const mesh = makeTile(tile);
-      mesh.position.set(0, 0.02, ZONES[side].river);
-      group.push(mesh);
+      mesh.position.copy(orient(0, 0.02, BASE.river, side));
+      faceSide(mesh, side);
+      melds[side].push(mesh);
       move(mesh, meldSpot(side, meldIndex, i), {
         duration: 0.32,
         delay: i * 0.05,
@@ -514,14 +548,13 @@ export async function createTable(canvas, { sound = null } = {}) {
         onDone: () => sound?.sfx?.clack?.(0, { gain: 0.7 }),
       });
     });
-    melds[side].push(...group);
-    if (side === 1) {
-      for (let i = 0; i < tiles.length - 1 && hands[1].length; i++) recycle(hands[1].pop());
-      reflowHand(1);
+    if (side !== 0) {
+      for (let i = 0; i < tiles.length - 1 && hands[side].length; i++) recycle(hands[side].pop());
+      reflowHand(side);
     }
   }
 
-  /** 완성 — 이긴 손패를 가운데 펼친다 */
+  /** 완성 — 이긴 손패를 가운데 두 줄로 펼친다 */
   function revealWin(sets, pair) {
     const groups = [...sets, pair];
     const rows = [groups.slice(0, 3), groups.slice(3)];
@@ -550,21 +583,20 @@ export async function createTable(canvas, { sound = null } = {}) {
   /** 산가지가 건너간다 */
   function payment(moves, humanSeat = 0) {
     for (const [m, pay] of moves.entries()) {
-      const fromSide = pay.from === humanSeat ? 0 : 1;
-      const toSide = pay.to === humanSeat ? 0 : 1;
+      const fromSide = seatSide(pay.from);
+      const toSide = seatSide(pay.to);
       const count = Math.min(4, Math.max(1, Math.round(pay.amount / 20)));
       for (let i = 0; i < count; i++) {
         const stickMesh = new THREE.Mesh(
           new THREE.CylinderGeometry(0.014, 0.014, 0.3, 8),
           new THREE.MeshStandardMaterial({ color: 0xf3ecd8, roughness: 0.5 })
         );
+        stickMesh.castShadow = true;
         stickMesh.rotation.z = Math.PI / 2;
-        const [fx, fz] = ZONES[fromSide].sticks;
-        const [tx, tz] = ZONES[toSide].sticks;
-        stickMesh.position.set(fx, 0.02, fz + i * 0.035);
+        stickMesh.position.copy(stickSpot(fromSide, i));
         scene.add(stickMesh);
         sticks.push(stickMesh);
-        move(stickMesh, new THREE.Vector3(tx, 0.02, tz + i * 0.035), {
+        move(stickMesh, stickSpot(toSide, i), {
           duration: 0.5,
           delay: m * 0.2 + i * 0.08,
           height: 0.22,
@@ -580,29 +612,36 @@ export async function createTable(canvas, { sound = null } = {}) {
   /** 상태 그대로 다시 깔기 — 한 수 물린 뒤처럼 화면과 상태가 어긋났을 때 */
   function rebuild(game, humanSeat = 0) {
     clearHand();
+    sideCount = game.playerCount;
+    seatSide = (seat) => (seat - humanSeat + sideCount) % sideCount;
+    rivers = Array.from({ length: sideCount }, () => []);
+    melds = Array.from({ length: sideCount }, () => []);
+    hands = Array.from({ length: sideCount }, () => []);
     for (let i = 0; i < game.pile.length; i++) {
       const mesh = makeTile(null);
       mesh.position.copy(wallSpot(i, game.pile.length));
       wallTiles.push(mesh);
     }
     for (const player of game.players) {
-      const side = player.seat === humanSeat ? 0 : 1;
-      if (side === 1) {
+      const side = seatSide(player.seat);
+      if (side !== 0) {
         player.concealed.forEach((_, i) => {
           const mesh = makeTile(null);
-          mesh.rotation.x = -Math.PI / 2.2;
-          mesh.position.copy(handSpot(1, i, player.concealed.length));
-          hands[1].push(mesh);
+          faceSide(mesh, side, -Math.PI / 2.2);
+          mesh.position.copy(handSpot(side, i, player.concealed.length));
+          hands[side].push(mesh);
         });
       }
       player.discards.forEach((tile, i) => {
         const mesh = makeTile(tile);
+        faceSide(mesh, side);
         mesh.position.copy(riverSpot(side, i));
         rivers[side].push(mesh);
       });
       player.melds.forEach((meld, mi) => {
         meld.tiles.forEach((tile, i) => {
           const mesh = makeTile(tile);
+          faceSide(mesh, side);
           mesh.position.copy(meldSpot(side, mi, i));
           melds[side].push(mesh);
         });
@@ -612,13 +651,11 @@ export async function createTable(canvas, { sound = null } = {}) {
 
   /** 남은 산 길이를 게임 상태에 맞춘다 */
   function sync(game) {
-    const back = game.log.filter((e) => e.type === "flower" || e.type === "kongReplacement").length;
     const target = game.pile.length;
     while (wallTiles.length > target) {
       const mesh = takeFromWall();
       if (mesh) recycle(mesh);
     }
-    void back;
   }
 
   function settle() {
@@ -673,6 +710,13 @@ export async function createTable(canvas, { sound = null } = {}) {
     rebuild,
     clearHand,
     // 화면을 눈으로 확인할 때 들여다보는 창구
-    debug: { scene, camera, wallTiles, hands, rivers, melds, get dice() { return dice; } },
+    debug: {
+      scene, camera,
+      get wallTiles() { return wallTiles; },
+      get hands() { return hands; },
+      get rivers() { return rivers; },
+      get melds() { return melds; },
+      get dice() { return dice; },
+    },
   };
 }

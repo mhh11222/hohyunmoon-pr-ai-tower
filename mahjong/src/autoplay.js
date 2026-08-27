@@ -1,7 +1,7 @@
 // 봇끼리 한 판을 끝까지 돌린다 — 콘솔 검증·테스트용 드라이버.
 
 import { PHASE, draw, discard, resolveDiscard, declareWin, actionsFor } from "./game.js";
-import { makeBot } from "./bot.js";
+import { makeBot, botContext } from "./bot.js";
 import { CALL } from "./calls.js";
 
 export function playHand(game, { bots = null, maxSteps = 2000 } = {}) {
@@ -22,7 +22,7 @@ export function playHand(game, { bots = null, maxSteps = 2000 } = {}) {
         declareWin(game, seat);
         continue;
       }
-      discard(game, agents[seat].discard(p));
+      discard(game, agents[seat].discard(p, botContext(game, seat)));
       continue;
     }
 

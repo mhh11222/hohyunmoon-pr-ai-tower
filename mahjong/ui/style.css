@@ -66,6 +66,15 @@ button.chip:disabled { opacity: .3; }
 .waits > span { font-size: 11px; opacity: .7; }
 #subtitle i { opacity: .78; font-size: 12px; }
 
+.optrow { display: flex; align-items: center; gap: 6px; margin: 10px 0 2px; flex-wrap: wrap; }
+.optlabel { font-size: 12px; opacity: .7; min-width: 58px; }
+button.opt {
+  font-size: 13px; font-weight: 600; padding: 7px 13px; min-height: 36px;
+  border-radius: 999px; background: rgba(255,255,255,.12); color: #eef3ef;
+}
+button.opt.picked { background: var(--gold); color: #14231c; }
+.optnote { margin: 2px 0 0 64px; }
+
 button.card {
   display: block; text-align: left; border-radius: 12px; padding: 12px 14px;
   background: rgba(255,255,255,.1); color: #eef3ef; width: 100%;
