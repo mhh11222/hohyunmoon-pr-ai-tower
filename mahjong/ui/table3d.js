@@ -120,7 +120,7 @@ export async function createTable(canvas, { sound = null } = {}) {
 
   setCam(ceremonyView(2));
 
-  scene.add(new THREE.HemisphereLight(0xdfeee6, 0x0a2a1f, 0.9));
+  scene.add(new THREE.HemisphereLight(0xf2ead9, 0x2e2620, 0.95));
   const key = new THREE.DirectionalLight(0xfff6e0, 1.35);
   key.position.set(-1.1, 2.7, 1.2);
   key.castShadow = true;
@@ -136,6 +136,63 @@ export async function createTable(canvas, { sound = null } = {}) {
   const rim = new THREE.DirectionalLight(0x8fd6b4, 0.35);
   rim.position.set(1.6, 1.2, -1.8);
   scene.add(rim);
+
+  // 배경 — 따뜻한 가정집을 아주 작게 그려 크게 늘리면 블러가 된다
+  function homeBackdrop() {
+    const small = document.createElement("canvas");
+    small.width = 48;
+    small.height = 72;
+    const c = small.getContext("2d");
+
+    // 벽 — 따뜻한 크림색, 아래로 갈수록 어둡게
+    const wallGrad = c.createLinearGradient(0, 0, 0, 72);
+    wallGrad.addColorStop(0, "#c9bba4");
+    wallGrad.addColorStop(0.55, "#a8987f");
+    wallGrad.addColorStop(1, "#6f6250");
+    c.fillStyle = wallGrad;
+    c.fillRect(0, 0, 48, 72);
+
+    // 왼쪽 창문 — 낮빛
+    const win = c.createRadialGradient(10, 18, 2, 10, 18, 16);
+    win.addColorStop(0, "rgba(255,248,224,.95)");
+    win.addColorStop(1, "rgba(255,248,224,0)");
+    c.fillStyle = win;
+    c.fillRect(0, 0, 26, 40);
+    c.fillStyle = "rgba(236,225,196,.8)";
+    c.fillRect(5, 9, 11, 17);
+
+    // 오른쪽 스탠드 — 노란 전등
+    const lamp = c.createRadialGradient(39, 22, 1, 39, 22, 12);
+    lamp.addColorStop(0, "rgba(255,208,130,.95)");
+    lamp.addColorStop(1, "rgba(255,208,130,0)");
+    c.fillStyle = lamp;
+    c.fillRect(27, 8, 21, 30);
+
+    // 가구 실루엣
+    c.fillStyle = "rgba(84,66,50,.55)";
+    c.fillRect(0, 34, 14, 14);
+    c.fillRect(33, 33, 15, 15);
+
+    // 마루 바닥
+    const floor = c.createLinearGradient(0, 46, 0, 72);
+    floor.addColorStop(0, "#7d5f43");
+    floor.addColorStop(1, "#4a3826");
+    c.fillStyle = floor;
+    c.fillRect(0, 46, 48, 26);
+
+    const big = document.createElement("canvas");
+    big.width = 512;
+    big.height = 768;
+    const bc = big.getContext("2d");
+    bc.imageSmoothingEnabled = true;
+    bc.imageSmoothingQuality = "high";
+    bc.drawImage(small, 0, 0, 512, 768); // 확대 = 자연 블러
+
+    const tex = new THREE.CanvasTexture(big);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+  scene.background = homeBackdrop();
 
   const felt = new THREE.Mesh(
     new THREE.PlaneGeometry(TABLE.w, TABLE.d),
@@ -184,6 +241,13 @@ export async function createTable(canvas, { sound = null } = {}) {
   }
 
   const sideMat = new THREE.MeshStandardMaterial({ color: 0xefe8d6, roughness: 0.55 });
+  // 패마다 옆면 상아색이 조금씩 달라 낱장으로 읽힌다
+  const sideShades = [0xf2ecdb, 0xe9e0cb, 0xefe6d2, 0xe4d9c0].map(
+    (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.55 })
+  );
+  const sideShadesLow = [0xd9cfb4, 0xd2c6a9].map(
+    (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 })
+  );
   const backMat = new THREE.MeshStandardMaterial({ color: 0xc99e5f, roughness: 0.55 }); // 대나무 등판
   const backMatLow = new THREE.MeshStandardMaterial({ color: 0x8f6c3a, roughness: 0.6 }); // 아래 칸 — 그늘진 대나무
   const tileGeo = new THREE.BoxGeometry(TILE.w, TILE.d, TILE.h);
@@ -228,10 +292,11 @@ export async function createTable(canvas, { sound = null } = {}) {
         toe.position.set(i * 0.038, -0.008, -0.062);
         group.add(toe);
       }
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.34, 10), mat);
-      leg.rotation.x = Math.PI / 2.4;
-      leg.position.set(0, 0.1, 0.2);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.2, 10), mat);
+      leg.rotation.x = Math.PI / 2.2;
+      leg.position.set(0, 0.06, 0.14);
       group.add(leg);
+      group.scale.setScalar(0.85);
     } else {
       const palm = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.032, 0.12), mat);
       group.add(palm);
@@ -246,10 +311,11 @@ export async function createTable(canvas, { sound = null } = {}) {
       thumb.rotation.x = -0.4;
       thumb.position.set(0.085, -0.01, -0.02);
       group.add(thumb);
-      const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.058, 0.3, 10), mat);
-      wrist.rotation.x = Math.PI / 2.35;
-      wrist.position.set(0, 0.03, 0.17);
+      const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.05, 0.16, 10), mat);
+      wrist.rotation.x = Math.PI / 2.15;
+      wrist.position.set(0, 0.015, 0.13);
       group.add(wrist);
+      group.scale.setScalar(0.8);
     }
     group.traverse((m) => { if (m.isMesh) m.castShadow = true; });
     group.visible = false;
@@ -260,39 +326,60 @@ export async function createTable(canvas, { sound = null } = {}) {
   let hands3d = []; // side마다 하나 — newHand에서 만든다
   let cats3d = [];  // 자리에 앉은 고양이들 — 각자 다른 잔모션으로 움직인다
 
-  /** 저폴리 고양이. kind = podo(작고 졸림) | gamja(하양·시크) | maknae(크고 뚱뚱·두리번) */
+  /**
+   * 저폴리 고양이 — 실물 무늬대로.
+   *   포도: 제일 작음. 삼색(어두운 바탕 + 주황 얼룩), 얼굴은 아수라백작 —
+   *         왼쪽 뺨 주황 / 오른쪽 어두움, 귀도 짝짝이. 늘 졸린 실눈.
+   *   감자: 보통 몸집. 새하얀 바탕에 회색 귀와 정수리 얼룩.
+   *   막내: 개뚱뚱. 흰 바탕에 회색 귀·머리·등 얼룩.
+   */
   function buildCat(kind) {
-    const palette = {
-      podo: { body: 0x40312a, patch: 0xa96a35, ear: 0x2e2320, nose: 0x8a4a3a, scale: 0.92 },
-      gamja: { body: 0xf3efe6, patch: null, ear: 0xe8ded6, nose: 0xd88f8f, scale: 1.1 },
-      maknae: { body: 0xf3efe6, patch: 0x8d9096, ear: 0x8d9096, nose: 0xcf8f96, scale: 1.38 },
-    }[kind] || { body: 0xcccccc, patch: null, ear: 0xbbbbbb, nose: 0xcc8888, scale: 1 };
+    const spec = {
+      podo: { base: 0x3a2e27, scale: 1.15, fat: 1 },
+      gamja: { base: 0xf4f0e8, scale: 1.4, fat: 1 },
+      maknae: { base: 0xf4f0e8, scale: 1.75, fat: 1.3 },
+    }[kind] || { base: 0xcccccc, scale: 1.2, fat: 1 };
 
-    const bodyMat = new THREE.MeshStandardMaterial({ color: palette.body, roughness: 0.9 });
-    const earMat = new THREE.MeshStandardMaterial({ color: palette.ear, roughness: 0.9 });
+    const ORANGE = 0xb5763f;
+    const GREY = 0x8d9096;
+    const mat = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
+    const bodyMat = mat(spec.base);
     const dark = new THREE.MeshStandardMaterial({ color: 0x14100d, roughness: 0.4 });
-    const noseMat = new THREE.MeshStandardMaterial({ color: palette.nose, roughness: 0.6 });
 
     const cat = new THREE.Group();
 
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.155, 14, 12), bodyMat);
-    body.scale.set(1, 0.85, 1.12);
-    if (kind === "maknae") body.scale.set(1.22, 0.8, 1.28); // 제일 뚱뚱하다
+    body.scale.set(1 * spec.fat, 0.85, 1.12 * spec.fat);
     body.position.y = 0.13;
     cat.add(body);
 
-    // 앞발 두 개
-    for (const dx of [-0.07, 0.07]) {
-      const paw = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), bodyMat);
-      paw.position.set(dx, 0.035, 0.13);
+    // 몸 얼룩
+    const bodyPatch = (color, x, y, z, r = 0.06) => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), mat(color));
+      m.scale.set(1.2, 0.7, 1.2);
+      m.position.set(x, y, z);
+      cat.add(m);
+    };
+    if (kind === "podo") {
+      bodyPatch(ORANGE, 0.09 * spec.fat, 0.2, 0.04, 0.055);   // 삼색 얼룩
+      bodyPatch(ORANGE, -0.07 * spec.fat, 0.11, -0.1, 0.05);
+      bodyPatch(0x241c17, 0.02, 0.23, -0.06, 0.06);
+    }
+    if (kind === "maknae") {
+      bodyPatch(GREY, -0.06 * spec.fat, 0.24, -0.05, 0.065);  // 등의 회색 얼룩
+    }
+
+    for (const dx of [-0.07 * spec.fat, 0.07 * spec.fat]) {
+      const paw = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), mat(kind === "podo" ? 0xe8dcc8 : 0xf4f0e8));
+      paw.position.set(dx, 0.035, 0.13 * spec.fat);
       cat.add(paw);
     }
 
-    // 꼬리 — 몸 뒤로 말려 있다
-    const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.022, 0.14, 3, 8), bodyMat);
+    const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.022, 0.14, 3, 8),
+      mat(kind === "podo" ? 0x2e2420 : kind === "maknae" ? GREY : 0xf4f0e8));
     tail.rotation.x = Math.PI / 2.6;
     tail.rotation.z = 0.7;
-    tail.position.set(0.13, 0.1, -0.13);
+    tail.position.set(0.13 * spec.fat, 0.1, -0.13 * spec.fat);
     cat.add(tail);
 
     // 머리 — 따로 묶어 고개짓을 시킨다
@@ -301,19 +388,39 @@ export async function createTable(canvas, { sound = null } = {}) {
     const skull = new THREE.Mesh(new THREE.SphereGeometry(0.105, 14, 12), bodyMat);
     skull.scale.set(1.05, 0.95, 0.95);
     head.add(skull);
-    if (palette.patch) {
-      const patch = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8),
-        new THREE.MeshStandardMaterial({ color: palette.patch, roughness: 0.9 }));
-      patch.scale.set(1.15, 0.8, 0.8);
-      patch.position.set(kind === "maknae" ? -0.055 : 0.045, 0.055, 0.01);
-      head.add(patch);
+
+    if (kind === "podo") {
+      // 아수라백작 — 왼쪽 반쪽이 주황
+      const half = new THREE.Mesh(new THREE.SphereGeometry(0.104, 14, 12), mat(ORANGE));
+      half.scale.set(0.55, 0.96, 0.96);
+      half.position.set(-0.052, 0, 0.004);
+      head.add(half);
     }
-    for (const dx of [-0.058, 0.058]) {
-      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.065, 8), earMat);
+    if (kind === "gamja") {
+      const crown = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 8), mat(GREY));
+      crown.scale.set(1.25, 0.6, 1);
+      crown.position.set(-0.035, 0.075, 0);
+      head.add(crown);
+    }
+    if (kind === "maknae") {
+      const crown = new THREE.Mesh(new THREE.SphereGeometry(0.062, 10, 8), mat(GREY));
+      crown.scale.set(1.3, 0.65, 1.05);
+      crown.position.set(0.04, 0.07, 0.01);
+      head.add(crown);
+    }
+
+    const earColor = {
+      podo: [0xb5763f, 0x2e2420],        // 왼쪽 주황 / 오른쪽 어두움 — 짝짝이
+      gamja: [GREY, GREY],
+      maknae: [GREY, GREY],
+    }[kind] || [0xbbbbbb, 0xbbbbbb];
+    [-0.058, 0.058].forEach((dx, i) => {
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.065, 8), mat(earColor[i]));
       ear.position.set(dx, 0.1, -0.01);
       ear.rotation.z = dx > 0 ? -0.25 : 0.25;
       head.add(ear);
-    }
+    });
+
     const eyes = [];
     for (const dx of [-0.042, 0.042]) {
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.013, 8, 8), dark);
@@ -322,15 +429,16 @@ export async function createTable(canvas, { sound = null } = {}) {
       head.add(eye);
       eyes.push(eye);
     }
-    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 8), noseMat);
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 8),
+      mat(kind === "podo" ? 0x7c463a : 0xd88f8f));
     nose.position.set(0, -0.03, 0.1);
     head.add(nose);
     cat.add(head);
 
-    cat.scale.setScalar(palette.scale);
+    cat.scale.setScalar(spec.scale);
     cat.traverse((m) => { if (m.isMesh) m.castShadow = true; });
     scene.add(cat);
-    return { group: cat, head, tail, eyes, kind, seed: Math.random() * 10 };
+    return { group: cat, head, tail, eyes, kind, seed: Math.random() * 10, dist: 1.1 + spec.scale * 0.07 };
   }
 
   /**
@@ -372,7 +480,7 @@ export async function createTable(canvas, { sound = null } = {}) {
       if (!info) return;
       const side = seatSide(seat);
       const cat = buildCat(info.key);
-      cat.group.position.copy(orient(0, 0, 1.12, side));
+      cat.group.position.copy(orient(0, 0, cat.dist, side));
       cat.group.rotation.y = sideAngle(side) + Math.PI; // 테이블 중앙을 본다
       cats3d.push(cat);
     });
@@ -390,7 +498,7 @@ export async function createTable(canvas, { sound = null } = {}) {
     const hand = hands3d[side];
     if (!hand) { if (mesh) mesh.position.copy(to); onDone?.(); return; }
     const rest = handRest(side);
-    const lift = 0.075;
+    const lift = 0.058;
     const from = grabAt ? grabAt.clone() : (mesh ? mesh.position.clone() : to.clone());
     const reach = duration * 0.45;
     const carry = duration * 0.55;
@@ -568,10 +676,10 @@ export async function createTable(canvas, { sound = null } = {}) {
 
     function wallPos(entry) {
       const stacks = counts[entry.wall];
-      const spread = Math.min(TILE.w + 0.006, 1.06 / stacks);
+      const spread = Math.min(TILE.w + 0.011, 1.06 / stacks); // 벽돌 사이 살짝 틈
       return orient(
         (entry.stack - (stacks - 1) / 2) * spread,
-        TILE.d / 2 + entry.tier * TILE.d,
+        TILE.d / 2 + entry.tier * TILE.d + 0.001,
         BASE.wall,
         seatSide(entry.wall)
       );
@@ -586,10 +694,18 @@ export async function createTable(canvas, { sound = null } = {}) {
       const mesh = makeTile(null);
       mesh.material = mesh.material.slice();
       mesh.material[2] = entry.tier === 0 ? backMatLow : backMat; // 아래 칸은 그늘지게
+      // 옆면을 낱장마다 다른 상아색으로 — 손으로 쌓은 티가 나게 미세하게 비틀어 놓는다
+      const shades = entry.tier === 0 ? sideShadesLow : sideShades;
+      const shade = shades[(entry.stack + entry.tier * 2 + entry.wall) % shades.length];
+      for (const f of [0, 1, 4, 5]) mesh.material[f] = shade;
       faceSide(mesh, seatSide(entry.wall));
+      mesh.rotation.y += (Math.random() - 0.5) * 0.045;
       mesh.position.set(0, 0.5, 0);
       wallTiles[entry.drawIndex] = mesh;
-      move(mesh, wallPos(entry), {
+      const to = wallPos(entry);
+      to.x += (Math.random() - 0.5) * 0.004;
+      to.z += (Math.random() - 0.5) * 0.004;
+      move(mesh, to, {
         duration: 0.34,
         delay: i * 0.009,
         height: 0.05,
@@ -888,11 +1004,15 @@ export async function createTable(canvas, { sound = null } = {}) {
       for (let i = 0; i < total; i++) {
         const entry = seq[i];
         const stacks = counts[entry.wall];
-        const spread = Math.min(TILE.w + 0.006, 1.06 / stacks);
+        const spread = Math.min(TILE.w + 0.011, 1.06 / stacks);
         const mesh = makeTile(null);
         mesh.material = mesh.material.slice();
         mesh.material[2] = entry.tier === 0 ? backMatLow : backMat;
+        const shades = entry.tier === 0 ? sideShadesLow : sideShades;
+        const shade = shades[(entry.stack + entry.tier * 2 + entry.wall) % shades.length];
+        for (const f of [0, 1, 4, 5]) mesh.material[f] = shade;
         faceSide(mesh, seatSide(entry.wall));
+        mesh.rotation.y += (Math.random() - 0.5) * 0.045;
         mesh.position.copy(orient(
           (entry.stack - (stacks - 1) / 2) * spread,
           TILE.d / 2 + entry.tier * TILE.d,
