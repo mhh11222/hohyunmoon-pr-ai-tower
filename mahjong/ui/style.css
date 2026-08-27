@@ -193,6 +193,28 @@ button.hot { background: var(--gold); }
 button.win { background: var(--red); color: #fff; }
 button:disabled { opacity: .4; }
 
+#shout {
+  position: fixed; top: 38%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 9; pointer-events: none; text-align: center;
+}
+#shout[hidden] { display: none; }
+#shout .word {
+  font-size: 54px; font-weight: 900; color: var(--gold);
+  text-shadow: 0 3px 0 #7a5b16, 0 6px 18px rgba(0,0,0,.55),
+    -2px 0 0 #14231c, 2px 0 0 #14231c, 0 -2px 0 #14231c, 0 2px 0 #14231c;
+  animation: shoutpop .7s cubic-bezier(.2, 1.6, .4, 1) both;
+}
+#shout .who {
+  font-size: 14px; font-weight: 700; color: #fbf7ec; margin-top: 2px;
+  text-shadow: 0 1px 4px rgba(0,0,0,.7);
+  animation: shoutpop .7s .06s cubic-bezier(.2, 1.6, .4, 1) both;
+}
+@keyframes shoutpop {
+  0% { transform: scale(.3) rotate(-6deg); opacity: 0; }
+  55% { transform: scale(1.12) rotate(2deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+
 #overlay {
   position: fixed; inset: 0; background: rgba(4,20,15,.86); backdrop-filter: blur(3px);
   display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10;

@@ -65,9 +65,9 @@ export function seatCats(playerCount, humanSeat = 0) {
 export const EMOTES = {
   greet:    { emoji: "😺",  text: "잘 부탁해",  meow: true },   // 판 시작
   draw:     { emoji: "🤔",  text: "",           meow: false },  // 고민하며 뽑기
-  call:     { emoji: "😼",  text: "펑!",        meow: true },   // 펑·치·깡
-  chow:     { emoji: "😼",  text: "치!",        meow: true },
-  win:      { emoji: "😻",  text: "완성!",      meow: true },   // 이겼다
+  call:     { emoji: "😼",  text: "펑!",        meow: false },  // 소리는 외치기가 맡는다
+  chow:     { emoji: "😼",  text: "치!",        meow: false },
+  win:      { emoji: "😻",  text: "완성!",      meow: false },  // 외치기 + 팡파르가 맡는다
   lose:     { emoji: "😿",  text: "",           meow: true },   // 산가지를 내준다
   robbed:   { emoji: "😾",  text: "야옹!!",     meow: true },   // 내 버림패를 뺏겼다
   tenpai:   { emoji: "😳",  text: "",           meow: false },  // (연출용) 흠칫

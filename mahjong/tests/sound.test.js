@@ -60,3 +60,28 @@ describe("선율", () => {
     }
   });
 });
+
+describe("외치기 — 치·펑·깡·완성 선언", () => {
+  it("네 가지 선언이 다 있다", async () => {
+    const { SHOUTS } = await import("../ui/sound.js");
+    expect(Object.keys(SHOUTS).sort()).toEqual(["chow", "kong", "pong", "win"]);
+    for (const spec of Object.values(SHOUTS)) {
+      expect(spec.text).toBeTruthy();
+      expect(spec.syllables.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("완성은 두 음절(완-성), 나머지는 한 음절", async () => {
+    const { SHOUTS } = await import("../ui/sound.js");
+    expect(SHOUTS.win.syllables).toHaveLength(2);
+    expect(SHOUTS.pong.syllables).toHaveLength(1);
+    expect(SHOUTS.chow.syllables).toHaveLength(1);
+  });
+
+  it("치는 올라가고 펑·깡은 내려찍는다", async () => {
+    const { SHOUTS } = await import("../ui/sound.js");
+    expect(SHOUTS.chow.syllables[0].rise).toBe(true);
+    expect(SHOUTS.pong.syllables[0].drop).toBe(true);
+    expect(SHOUTS.kong.syllables[0].drop).toBe(true);
+  });
+});
