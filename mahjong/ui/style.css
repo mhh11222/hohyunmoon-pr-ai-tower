@@ -83,6 +83,11 @@ button.card.hot { background: var(--gold); color: #14231c; }
 button.card b { display: block; font-size: 15px; margin-bottom: 3px; }
 button.card span { display: block; font-size: 12px; font-weight: 500; line-height: 1.4; opacity: .85; }
 .sheet .row b.mn { font-weight: 500; opacity: .85; text-align: right; max-width: 62%; }
+.sheet .chain {
+  background: rgba(224,181,82,.12); border-radius: 8px; padding: 8px 10px;
+  font-size: 13px; line-height: 1.7; word-break: keep-all;
+}
+.sheet .chain i { color: var(--gold); font-style: normal; font-size: 11px; }
 
 .seat { background: rgba(0,0,0,.16); border-radius: 10px; padding: 7px 8px; }
 .seat-head {

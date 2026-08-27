@@ -622,7 +622,7 @@ export async function createTable(canvas, { sound = null } = {}) {
   }
 
   /** 섞기 → 산 쌓기 → 주사위 → 배패 */
-  async function newHand(game, { humanSeat = 0, onStage = null, cats = null } = {}) {
+  async function newHand(game, { humanSeat = 0, onStage = null, onGate = null, cats = null } = {}) {
     clearHand();
     sideCount = game.playerCount;
     humanSide = 0;
@@ -639,7 +639,8 @@ export async function createTable(canvas, { sound = null } = {}) {
     if (game.handNumber === 1 && game.dealerRoll) {
       onStage?.("dealerRoll", game.dealerRoll);
       await rollDice(game.dealerRoll.dice, 0);
-      await pause(1.4);
+      await pause(0.8);
+      await onGate?.("dealerRoll", game.dealerRoll);
       for (const die of dice) recycle(die);
       dice = [];
     }
@@ -752,6 +753,7 @@ export async function createTable(canvas, { sound = null } = {}) {
     });
     await settle();
     await pause(0.4);
+    await onGate?.("wall", { counts });
 
     // 산이 다 섰으니 카메라가 스르륵 내려간다 — 이제 상대 얼굴을 보며 친다
     onStage?.("camera");
@@ -762,6 +764,7 @@ export async function createTable(canvas, { sound = null } = {}) {
       onStage?.("dice", roll);
       await rollDice(roll.dice, seatSide(game.dealerIndex));
       await pause(0.9);
+      await onGate?.("opening", roll);
     }
 
     // 4) 배패 — 실제 순서 그대로: 딜러부터 반시계로 돌며 각자 자기 손으로
@@ -805,6 +808,7 @@ export async function createTable(canvas, { sound = null } = {}) {
         // 그 자리 손이 함께 움직인다 (빈손으로 산까지 갔다 돌아온다)
         handCarry(side, null, grabAt, { duration: 0.55, grabAt });
         await settle();
+        onStage?.("dealGrab", { seat, count: grabbed.length });
         await pause(0.18);
       }
       await pause(0.3);
@@ -829,8 +833,10 @@ export async function createTable(canvas, { sound = null } = {}) {
           onDone: () => { if (side === 0) recycle(mesh); },
         });
         await settle();
+        onStage?.("dealGrab", { seat: game.dealerIndex, count: 1 });
       }
     }
+    await onGate?.("dealt", {});
 
     await settle();
     parkDice();
