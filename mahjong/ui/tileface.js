@@ -76,7 +76,7 @@ function pipsHTML(face, shape) {
 }
 
 /** 패 하나의 HTML. back=true면 뒷면 */
-export function tileHTML(id, { back = false, extraClass = "", label = "" } = {}) {
+export function tileHTML(id, { back = false, extraClass = "", label = "", index = null } = {}) {
   if (back) return `<span class="tile back ${extraClass}"></span>`;
   const face = tileFace(id);
   let inner = "";
@@ -89,7 +89,9 @@ export function tileHTML(id, { back = false, extraClass = "", label = "" } = {})
   else inner = `<span class="glyph">${face.glyph}</span>`;
 
   const aria = face.name;
-  return `<span class="tile ${face.tone} ${face.kind} ${extraClass}" data-tile="${id}" role="img" aria-label="${aria}" title="${aria}">${inner}${
+  return `<span class="tile ${face.tone} ${face.kind} ${extraClass}" data-tile="${id}"${
+    index === null ? "" : ` data-index="${index}"`
+  } role="img" aria-label="${aria}" title="${aria}">${inner}${
     label ? `<span class="tile-label">${label}</span>` : ""
   }</span>`;
 }

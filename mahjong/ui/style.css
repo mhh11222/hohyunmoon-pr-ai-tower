@@ -46,6 +46,35 @@ header h1 { font-size: 15px; margin: 0; letter-spacing: .02em; opacity: .9; }
 }
 #subtitle b { color: var(--gold); font-weight: 600; }
 
+#toolbar { display: flex; gap: 6px; justify-content: flex-end; }
+button.chip {
+  font-size: 12px; font-weight: 600; padding: 6px 12px; min-height: 32px;
+  border-radius: 999px; background: rgba(255,255,255,.14); color: #eef3ef;
+}
+button.chip:disabled { opacity: .3; }
+
+#coach {
+  background: rgba(224,181,82,.1); border: 1px solid rgba(224,181,82,.35);
+  border-radius: 10px; padding: 8px 10px;
+}
+#coach[hidden] { display: none; }
+.coach-head { font-size: 11px; letter-spacing: .04em; color: var(--gold); margin-bottom: 3px; }
+#coach p { margin: 2px 0; font-size: 13px; line-height: 1.4; }
+#coach p.note { font-size: 12px; opacity: .8; font-style: italic; }
+#coach b { color: var(--gold); }
+.waits { display: flex; align-items: center; gap: 5px; margin-top: 5px; flex-wrap: wrap; }
+.waits > span { font-size: 11px; opacity: .7; }
+#subtitle i { opacity: .78; font-size: 12px; }
+
+button.card {
+  display: block; text-align: left; border-radius: 12px; padding: 12px 14px;
+  background: rgba(255,255,255,.1); color: #eef3ef; width: 100%;
+}
+button.card.hot { background: var(--gold); color: #14231c; }
+button.card b { display: block; font-size: 15px; margin-bottom: 3px; }
+button.card span { display: block; font-size: 12px; font-weight: 500; line-height: 1.4; opacity: .85; }
+.sheet .row b.mn { font-weight: 500; opacity: .85; text-align: right; max-width: 62%; }
+
 .seat { background: rgba(0,0,0,.16); border-radius: 10px; padding: 7px 8px; }
 .seat-head {
   display: flex; justify-content: space-between; align-items: center;
@@ -146,7 +175,7 @@ button:disabled { opacity: .4; }
 .setbox { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .setbox .cap { font-size: 10px; opacity: .7; }
 .setbox.open .cap { color: var(--gold); opacity: .9; }
-.sheet .actions { display: flex; gap: 8px; margin-top: 14px; }
+.sheet .actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .sheet .actions button { flex: 1; }
 .pos { color: #8fe0b0; } .neg { color: #f2a5a5; }
 .hint { font-size: 12px; opacity: .7; margin-top: 6px; }

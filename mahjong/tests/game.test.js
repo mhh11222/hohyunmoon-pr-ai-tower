@@ -246,3 +246,51 @@ describe("학습 모드 훅", () => {
     expect(actionsFor(game, notTurn)).toEqual([]);
   });
 });
+
+describe("한 수 물리기 (학습 모드)", () => {
+  it("버리기 전으로 정확히 돌아간다", async () => {
+    const { snapshotGame, restoreGame } = await import("../src/game.js");
+    const game = startHand(createGame({ playerCount: 4, seed: 55 }));
+    const snap = snapshotGame(game);
+    const seat = game.turn;
+    const tile = game.players[seat].concealed[0];
+
+    discard(game, tile);
+    if (game.phase === PHASE.CALLS) resolveDiscard(game, []);
+    expect(game.players[seat].concealed).not.toContain(tile);
+
+    restoreGame(game, snap);
+    expect(game.players[seat].concealed).toContain(tile);
+    expect(game.players[seat].discards).toHaveLength(0);
+    expect(game.turn).toBe(seat);
+    expect(game.phase).toBe(PHASE.DISCARD);
+    expect(tilesInPlay(game)).toBe(DECK_SIZE[4]);
+  });
+
+  it("스냅샷은 원본과 따로 논다 (얕은 복사가 아니다)", async () => {
+    const { snapshotGame } = await import("../src/game.js");
+    const game = startHand(createGame({ playerCount: 2, seed: 5 }));
+    const snap = snapshotGame(game);
+    const before = snap.players[0].concealed.length;
+    game.players[0].concealed.push("p1");
+    game.bank.players[0][10] = 99;
+    expect(snap.players[0].concealed).toHaveLength(before);
+    expect(snap.bank.players[0][10]).not.toBe(99);
+  });
+
+  it("되돌린 뒤 산가지도 원래대로", async () => {
+    const { snapshotGame, restoreGame } = await import("../src/game.js");
+    const game = startHand(createGame({ playerCount: 2, seed: 9 }));
+    const snap = snapshotGame(game);
+    game.players[0].concealed = [
+      "p1","p2","p3","p4","p5","p6","s1","s1","s1","s4","s5","s6","z1","z1","z1","z5","z5",
+    ];
+    game.turn = 0; game.phase = PHASE.DISCARD;
+    declareWin(game, 0);
+    expect(bankTotal(game)).toBe(TOTAL_VALUE);
+    restoreGame(game, snap);
+    expect(game.bank.players[0][10]).toBe(10);
+    expect(game.phase).toBe(PHASE.DISCARD);
+    expect(game.result).toBe(null);
+  });
+});

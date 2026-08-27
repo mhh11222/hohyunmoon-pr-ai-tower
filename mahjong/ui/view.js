@@ -3,6 +3,7 @@
 import { tileHTML, tilesHTML } from "./tileface.js";
 import { SEATS, tileName } from "../src/tiles.js";
 import { PHASE } from "../src/game.js";
+import { mnemonic } from "./coach.js";
 import { purseValue } from "../src/sticks.js";
 
 const CALL_LABEL = { pong: "펑", chow: "치", kong: "깡", win: "완성!" };
@@ -78,7 +79,7 @@ export function render(state) {
     </div>
     ${meldsHTML(me)}
     <div class="hand mine" id="myHand">${me.concealed
-      .map((t) => tileHTML(t, { extraClass: state.picked === t ? "pick" : "" }))
+      .map((t, i) => tileHTML(t, { extraClass: state.picked?.index === i ? "pick" : "", index: i }))
       .join("")}</div>`;
 
   document.getElementById("me").classList.toggle(
@@ -86,7 +87,31 @@ export function render(state) {
     game.turn === human && game.phase !== PHASE.CALLS
   );
   document.getElementById("subtitle").innerHTML = state.subtitle || "";
+  renderToolbar(state);
+  renderCoach(state);
   renderActions(state);
+}
+
+function renderToolbar(state) {
+  document.getElementById("toolbar").innerHTML = state.tools
+    .map((t, i) => `<button class="${t.style || ""}" data-tool="${i}"${t.disabled ? " disabled" : ""}>${t.label}</button>`)
+    .join("");
+}
+
+function renderCoach(state) {
+  const box = document.getElementById("coach");
+  if (!state.coach) {
+    box.innerHTML = "";
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const waits = state.coach.tenpai
+    ? `<div class="waits"><span>이 패가 오면 완성</span>${tilesHTML(state.coach.tenpai.waits, { extraClass: "small" })}</div>`
+    : "";
+  const note = state.note ? `<p class="note">${state.note}</p>` : "";
+  box.innerHTML = `<div class="coach-head">🎓 손패 코치</div>
+    ${state.coach.lines.map((l) => `<p>${l}</p>`).join("")}${waits}${note}`;
 }
 
 function renderActions(state) {
@@ -114,7 +139,7 @@ function setCaption(tiles) {
 }
 
 /** 완성 화면 */
-export function resultSheet(game, human) {
+export function resultSheet(game, human, guide = false) {
   const r = game.result;
   if (!r || r.winner === null || r.winner === undefined) {
     return `<h2>유국</h2><p>산이 떨어져 아무도 완성하지 못했습니다. 딜러는 그대로입니다.</p>
@@ -139,7 +164,8 @@ export function resultSheet(game, human) {
     ${r.bonuses.map((b) => `<div class="row"><span>${b.name} (보너스 ${b.value})</span><b>+${b.value * bonusPoint}</b></div>`).join("")}
     <div class="row"><span><b>받는 점수</b> — 보너스 ${r.bonusTotal}개</span><b>${r.value}점</b></div>
     ${r.payments.map((p) => `<div class="row"><span>${seatLabel(game, p.from)} → ${seatLabel(game, p.to)}</span><b>${p.amount}점</b></div>`).join("")}
-    ${totalsHTML(game, human)}`;
+    ${totalsHTML(game, human)}
+    ${guide ? `<p class="hint">${mnemonic(r.isSelfDraw ? "bonus" : "ron").line}</p>` : ""}`;
 }
 
 function totalsHTML(game, human) {

@@ -265,6 +265,20 @@ export function nextHand(game) {
   return startHand(game);
 }
 
+/**
+ * 한 수 물리기용 스냅샷. 난수 함수만 빼고 통째로 복사한다.
+ * 판이 시작된 뒤에는 난수를 쓰지 않으므로 되돌려도 결과가 어긋나지 않는다.
+ */
+export function snapshotGame(game) {
+  const { rng, ...rest } = game;
+  return structuredClone(rest);
+}
+
+export function restoreGame(game, snap) {
+  for (const key of Object.keys(snap)) game[key] = structuredClone(snap[key]);
+  return game;
+}
+
 /** 학습 모드용 — 지금까지 보이는 패로 대기패 계산 */
 export function seenCounts(game, seat) {
   const seen = {};

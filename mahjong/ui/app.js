@@ -1,31 +1,64 @@
 // 조작 — 규칙 엔진과 화면을 잇는다. 규칙 판단은 전부 엔진이 한다.
+//
+// 두 가지 모드로 돈다.
+//   학습 모드: 자막·손패 코치·텐파이 표시·연상 고리·한 수 물리기. 봇도 천천히 둔다.
+//   실전 모드: 힌트 없이 빠르게. 누가 무엇을 버렸는지만 알려준다.
 
 import {
-  createGame, startHand, nextHand, draw, discard, resolveDiscard, declareWin, PHASE,
+  createGame, startHand, nextHand, draw, discard, resolveDiscard, declareWin,
+  snapshotGame, restoreGame, seenCounts, PHASE,
 } from "../src/game.js";
 import { makeBot } from "../src/bot.js";
 import { isWinningHand } from "../src/hand.js";
-import { tileName } from "../src/tiles.js";
+import { tileName, SEATS } from "../src/tiles.js";
+import { coachHand, tileNote, mnemonic, MNEMONICS } from "./coach.js";
 import { render, showSheet, hideSheet, resultSheet, callButtonLabel, seatLabel } from "./view.js";
 
-const BOT_DELAY = 700;   // 봇이 생각하는 척하는 시간
-const CALL_DELAY = 420;
+export const MODES = {
+  learn: { key: "learn", name: "학습 모드", guide: true, coach: true, undo: true, botDelay: 900, callDelay: 600 },
+  real: { key: "real", name: "실전 모드", guide: false, coach: false, undo: false, botDelay: 420, callDelay: 260 },
+};
 
 const state = {
   game: null,
   human: 0,
   bots: [],
+  mode: MODES.learn,
   buttons: [],
+  tools: [],
   subtitle: "",
+  coach: null,
+  note: null,
   picked: null,
   rounds: 4,
+  paused: false,
+  flash: null,
+  pending: null,   // 일시정지 중 밀린 진행
+  undoStack: [],
   timer: null,
 };
 
+/* ── 말하기 ─────────────────────────────────────────── */
+
+/** 학습 모드면 길게, 실전 모드면 짧게. 직전 알림(flash)이 있으면 앞에 붙인다. */
+function say(full, terse = "") {
+  const head = state.flash ? `${state.flash} ` : "";
+  state.flash = null;
+  state.subtitle = head + (state.mode.guide ? full : terse);
+}
+
+function withMnemonic(text, key) {
+  const m = mnemonic(key);
+  return m && state.mode.guide ? `${text} <i>— ${m.line}</i>` : text;
+}
+
 /* ── 진행 ───────────────────────────────────────────── */
 
-function newGame(playerCount = 2, rounds = 4) {
+function newGame(mode, playerCount = 2, rounds = 4) {
+  state.mode = mode;
   state.rounds = rounds;
+  state.paused = false;
+  state.undoStack = [];
   state.game = createGame({ playerCount, seed: (Date.now() % 1e9) | 0 });
   state.bots = Array.from({ length: playerCount }, () => makeBot());
   startHand(state.game);
@@ -36,28 +69,34 @@ function newGame(playerCount = 2, rounds = 4) {
 
 function announceDeal() {
   const g = state.game;
+  state.picked = null;
+  state.note = null;
+  state.undoStack = [];
   const dice = g.log.find((e) => e.type === "dice");
   const flowers = g.log.find((e) => e.type === "flowers");
-  state.subtitle =
+  say(
     `<b>주사위 ${dice.dice.join("+")}=${dice.sum}</b> → 산의 입구를 정하고, 벽돌 2개(4장)씩 4바퀴 나눴습니다. ` +
-    `손패 16장, 딜러만 17장.` +
-    (flowers ? ` 꽃 ${flowers.events.length}장은 눕히고 담 뒤쪽에서 보충했습니다.` : "");
+      `손패 16장, 딜러만 17장.` +
+      (flowers ? ` 꽃 ${flowers.events.length}장은 눕히고 담 뒤쪽에서 보충했습니다.` : ""),
+    `${g.handNumber}판 시작 — 딜러는 ${seatLabel(g, g.dealerIndex)}`
+  );
 }
 
 function step() {
   const g = state.game;
   state.buttons = [];
+  updateCoach();
+  updateTools();
 
   if (g.phase === PHASE.WON || g.phase === PHASE.EXHAUSTED) {
     render(state);
     return finishHand();
   }
-
   if (g.phase === PHASE.CALLS) return handleCalls();
   if (g.turn === state.human) return humanTurn();
 
   render(state);
-  wait(BOT_DELAY, botTurn);
+  wait(state.mode.botDelay, botTurn);
 }
 
 function humanTurn() {
@@ -65,33 +104,48 @@ function humanTurn() {
   const me = g.players[state.human];
 
   if (g.phase === PHASE.DRAW) {
-    state.subtitle = "<b>내 차례</b> — 먼저 한 장 뽑습니다. 한 턴은 들이쉬고(뽑고) → 내쉬고(버리고).";
-    state.buttons = [{ label: "뽑기", style: "hot", onClick: () => { draw(g); step(); } }];
+    say(
+      withMnemonic("<b>내 차례</b> — 먼저 한 장 뽑습니다.", "rhythm"),
+      "내 차례 — 뽑기"
+    );
+    state.buttons = [{ label: "뽑기", style: "hot", onClick: () => { remember(); draw(g); step(); } }];
     return render(state);
   }
 
   if (state.picked) {
-    state.subtitle = `<b>${tileName(state.picked)}</b>를 버릴까요? 버린 패는 되돌릴 수 없습니다.`;
+    state.note = state.mode.coach ? tileNote(state.picked.id, me.seatName) : null;
+    say(
+      `<b>${tileName(state.picked.id)}</b>를 버릴까요? 버린 패는 되돌릴 수 없습니다.`,
+      `${tileName(state.picked.id)} 버리기?`
+    );
     state.buttons = [
-      { label: `${tileName(state.picked)} 버리기`, style: "hot", onClick: doDiscard },
-      { label: "취소", style: "ghost", onClick: () => { state.picked = null; step(); } },
+      { label: `${tileName(state.picked.id)} 버리기`, style: "hot", onClick: doDiscard },
+      { label: "취소", style: "ghost", onClick: () => { state.picked = null; state.note = null; step(); } },
     ];
     return render(state);
   }
 
   if (isWinningHand(me.concealed, me.melds.length)) {
-    state.subtitle = "<b>완성!</b> 묶음 5개 + 짝 1개가 다 됐습니다. 더 크게 먹으려면 패를 눌러 계속 갈 수도 있습니다.";
-    state.buttons = [{ label: "완성!", style: "win", onClick: () => { declareWin(g, state.human); step(); } }];
+    say(
+      withMnemonic("<b>완성!</b> 묶음 5개 + 짝 1개가 다 됐습니다. 더 크게 먹으려면 패를 눌러 계속 갈 수도 있습니다.", "bonus"),
+      "완성할 수 있습니다"
+    );
+    state.buttons = [{ label: "완성!", style: "win", onClick: () => { remember(); declareWin(g, state.human); step(); } }];
     return render(state);
   }
 
-  state.subtitle = "버릴 패를 고르세요. 외톨이 글자패·끝수(1·9)부터 버리는 게 정석입니다.";
+  say(
+    withMnemonic("버릴 패를 고르세요.", "discard"),
+    "버릴 패를 고르세요"
+  );
   return render(state);
 }
 
 function doDiscard() {
-  const tile = state.picked;
+  const tile = state.picked.id;
   state.picked = null;
+  state.note = null;
+  remember();
   discard(state.game, tile);
   step();
 }
@@ -99,24 +153,28 @@ function doDiscard() {
 function handleCalls() {
   const g = state.game;
   const mine = g.pending.calls.filter((c) => c.seat === state.human);
-  const discarder = seatLabel(g, g.pending.from);
+  const who = seatLabel(g, g.pending.from);
 
   if (!mine.length) {
-    state.subtitle = `${discarder}가 <b>${tileName(g.pending.tile)}</b>를 버렸습니다.`;
+    say(
+      withMnemonic(`${who}가 <b>${tileName(g.pending.tile)}</b>를 버렸습니다.`, "river"),
+      `${who} → ${tileName(g.pending.tile)}`
+    );
     render(state);
-    return wait(CALL_DELAY, () => resolveWith(null));
+    return wait(state.mode.callDelay, () => resolveWith(null));
   }
 
-  state.subtitle =
-    `${discarder}가 버린 <b>${tileName(g.pending.tile)}</b> — 부를 수 있습니다. ` +
-    "부르기는 의무가 아니라 선택입니다. 급하면 부르고, 크게 먹으려면 참습니다.";
+  say(
+    withMnemonic(`${who}가 버린 <b>${tileName(g.pending.tile)}</b> — 부를 수 있습니다.`, "call"),
+    `${who} → ${tileName(g.pending.tile)} · 부를 수 있습니다`
+  );
   state.buttons = [
     ...mine.map((c) => ({
       label: callButtonLabel(c),
       style: c.type === "win" ? "win" : "hot",
-      onClick: () => resolveWith(c),
+      onClick: () => { remember(); resolveWith(c); },
     })),
-    { label: "패스", style: "ghost", onClick: () => resolveWith(null) },
+    { label: "패스", style: "ghost", onClick: () => { remember(); resolveWith(null); } },
   ];
   render(state);
 }
@@ -134,9 +192,13 @@ function resolveWith(humanClaim) {
   if (humanClaim) claims.push(humanClaim);
   resolveDiscard(g, claims);
 
-  const called = g.log[g.log.length - 1];
-  if (called?.type === "call" && called.call !== "win") {
-    state.subtitle = `${seatLabel(g, called.seat)}가 <b>${{ pong: "펑", chow: "치", kong: "깡" }[called.call]}</b>했습니다. 공개한 묶음은 잠겨서 다시 바꿀 수 없습니다.`;
+  const last = g.log[g.log.length - 1];
+  if (last?.type === "call" && last.call !== "win") {
+    const label = { pong: "펑", chow: "치", kong: "깡" }[last.call];
+    say(
+      withMnemonic(`${seatLabel(g, last.seat)}가 <b>${label}</b>했습니다.`, "locked"),
+      `${seatLabel(g, last.seat)} ${label}`
+    );
   }
   step();
 }
@@ -152,12 +214,90 @@ function botTurn() {
 
   if (bot.wantsWin(p)) { declareWin(g, seat); return step(); }
   const tile = bot.discard(p);
-  state.subtitle = `${seatLabel(g, seat)}가 <b>${tileName(tile)}</b>를 버렸습니다.`;
+  say(`${seatLabel(g, seat)}가 <b>${tileName(tile)}</b>를 버렸습니다.`, `${seatLabel(g, seat)} → ${tileName(tile)}`);
   discard(g, tile);
   step();
 }
 
-/** 시트를 띄우면서 버튼 목록을 기억해 둔다 */
+/* ── 학습 모드 도구 ─────────────────────────────────── */
+
+function updateCoach() {
+  const g = state.game;
+  if (!state.mode.coach || !g || g.phase === PHASE.WON || g.phase === PHASE.EXHAUSTED) {
+    state.coach = null;
+    return;
+  }
+  const me = g.players[state.human];
+  state.coach = coachHand(me, { seen: seenCounts(g, state.human) });
+}
+
+function remember() {
+  if (!state.mode.undo) return;
+  state.undoStack.push(snapshotGame(state.game));
+  if (state.undoStack.length > 20) state.undoStack.shift();
+}
+
+function undo() {
+  const snap = state.undoStack.pop();
+  if (!snap) return;
+  clearTimeout(state.timer);
+  state.pending = null;
+  restoreGame(state.game, snap);
+  state.picked = null;
+  state.note = null;
+  state.flash = "<b>한 수 물렸습니다.</b> 다시 골라 보세요.";
+  step();
+}
+
+function updateTools() {
+  const tools = [
+    { label: state.mode === MODES.learn ? "🎓 학습" : "⚡ 실전", style: "chip", onClick: switchMode },
+    { label: state.paused ? "▶ 계속" : "⏸ 멈춤", style: "chip", onClick: togglePause },
+    { label: "?", style: "chip", onClick: helpSheet },
+  ];
+  if (state.mode.undo) {
+    tools.splice(1, 0, {
+      label: "↩ 한 수",
+      style: "chip",
+      disabled: state.undoStack.length === 0,
+      onClick: undo,
+    });
+  }
+  state.tools = tools;
+}
+
+function switchMode() {
+  state.mode = state.mode === MODES.learn ? MODES.real : MODES.learn;
+  if (!state.mode.undo) state.undoStack = [];
+  state.flash = `<b>${state.mode.name}</b>로 바꿨습니다.`;
+  step();
+}
+
+function togglePause() {
+  state.paused = !state.paused;
+  if (!state.paused && state.pending) {
+    const fn = state.pending;
+    state.pending = null;
+    return fn();
+  }
+  updateTools();
+  render(state);
+}
+
+function helpSheet() {
+  const rows = MNEMONICS.map(
+    (m) => `<div class="row"><span>${m.title}</span><b class="mn">${m.line}</b></div>`
+  ).join("");
+  sheet(
+    `<h2>연상 고리</h2>
+     <p>외우지 말고 그림으로 기억하세요. 학습 모드에서는 상황마다 이 문장들이 자막에 따라붙습니다.</p>
+     ${rows}`,
+    [{ label: "닫기", style: "hot", onClick: () => { hideSheet(); step(); } }]
+  );
+}
+
+/* ── 판 끝 ──────────────────────────────────────────── */
+
 function sheet(html, buttons) {
   state.sheetButtons = buttons;
   showSheet(html, buttons);
@@ -166,7 +306,7 @@ function sheet(html, buttons) {
 function finishHand() {
   const g = state.game;
   const last = g.handNumber >= state.rounds;
-  sheet(resultSheet(g, state.human), [
+  sheet(resultSheet(g, state.human, state.mode.guide), [
     last
       ? { label: "최종 정산", style: "hot", onClick: showFinal }
       : { label: "다음 판", style: "hot", onClick: () => { nextHand(g); hideSheet(); announceDeal(); step(); } },
@@ -182,7 +322,7 @@ function showFinal() {
   sheet(
     `<h2>${state.rounds}판 정산</h2><p>손익 = 지금 산가지 − 시작액 ${g.bank.startingValue}점.</p>${rows}
      <p class="hint">환전(점수 → 돈) 화면은 STEP F에서 붙습니다.</p>`,
-    [{ label: "새 게임", style: "hot", onClick: () => setupSheet() }]
+    [{ label: "새 게임", style: "hot", onClick: setupSheet }]
   );
 }
 
@@ -193,8 +333,21 @@ function setupSheet() {
     `<h2>대만마작 학습용 게임</h2>
      <p>내 세트 기준입니다. 4인 140장 · 3인 104장(만자 빼고) · 2인 100장(만자·꽃 빼고).<br>
      손패 16장, 딜러 17장. <b>묶음 3장짜리 5개 + 짝 1개</b>를 만들면 이깁니다.</p>
-     <p class="hint">STEP B는 2인 판입니다. 상대는 봇 1명, 3·4인은 STEP E에서 열립니다.</p>`,
-    [{ label: "2인으로 시작", style: "hot", onClick: () => newGame(2, 4) }]
+     <p class="hint">모드는 게임 중에도 위쪽 배지를 눌러 바꿀 수 있습니다.
+     지금은 2인 판이고, 3·4인은 STEP E에서 열립니다.</p>`,
+    [
+      {
+        label: `<b>🎓 학습 모드</b><span>매 단계 자막 · 손패 코치(몇 묶음 됐는지·무엇을 버릴지)
+                · 텐파이 대기패 표시 · 연상 고리 · 한 수 물리기</span>`,
+        style: "card hot",
+        onClick: () => newGame(MODES.learn, 2, 4),
+      },
+      {
+        label: `<b>⚡ 실전 모드</b><span>힌트 없이 빠르게. 누가 무엇을 버렸는지만 알려줍니다.</span>`,
+        style: "card",
+        onClick: () => newGame(MODES.real, 2, 4),
+      },
+    ]
   );
 }
 
@@ -202,10 +355,14 @@ function setupSheet() {
 
 function wait(ms, fn) {
   clearTimeout(state.timer);
+  if (state.paused) { state.pending = fn; return; }
   state.timer = setTimeout(fn, ms);
 }
 
 function onClick(event) {
+  const tool = event.target.closest("#toolbar button");
+  if (tool) return state.tools[Number(tool.dataset.tool)]?.onClick?.();
+
   const actionBtn = event.target.closest("#actions button");
   if (actionBtn) return state.buttons[Number(actionBtn.dataset.idx)]?.onClick?.();
 
@@ -214,9 +371,9 @@ function onClick(event) {
 
   const tile = event.target.closest("#myHand .tile");
   if (tile && state.game?.phase === PHASE.DISCARD && state.game.turn === state.human) {
-    const id = tile.dataset.tile;
-    if (state.picked === id) return doDiscard();
-    state.picked = id;
+    const index = Number(tile.dataset.index);
+    if (state.picked?.index === index) return doDiscard();
+    state.picked = { id: tile.dataset.tile, index };
     return humanTurn();
   }
 }
