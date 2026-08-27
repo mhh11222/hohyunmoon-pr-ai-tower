@@ -184,9 +184,9 @@ function totalsHTML(game, human) {
     .join("")}</div>`;
 }
 
-export function showSheet(html, buttons) {
+export function showSheet(html, buttons, { row = false } = {}) {
   const overlay = document.getElementById("overlay");
-  overlay.innerHTML = `<div class="sheet">${html}<div class="actions">${buttons
+  overlay.innerHTML = `<div class="sheet">${html}<div class="actions${row ? " row" : ""}">${buttons
     .map((b, i) => `<button class="${b.style || ""}" data-sheet="${i}">${b.label}</button>`)
     .join("")}</div></div>`;
   overlay.classList.add("on");

@@ -182,6 +182,23 @@ button:disabled { opacity: .4; }
 .setbox .cap { font-size: 10px; opacity: .7; }
 .setbox.open .cap { color: var(--gold); opacity: .9; }
 .sheet .actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.sheet .actions.row { flex-direction: row; flex-wrap: wrap; }
+.sheet .actions.row button { flex: 1; min-width: 96px; }
+
+.rulehead { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.rulehead h2 { margin: 0; }
+.rulehead .step { font-size: 11px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.rulerow { display: flex; align-items: center; gap: 9px; margin: 7px 0; }
+.rulerow .meld { background: none; padding: 0; flex: 0 0 auto; }
+.rulerow .cap { font-size: 12px; opacity: .82; line-height: 1.35; }
+.rulecard p { margin: 10px 0 0; }
+.rulecard p.tip {
+  font-size: 12px; background: rgba(224,181,82,.12); border-radius: 8px;
+  padding: 7px 9px; margin-top: 10px; opacity: .95;
+}
+.dots { display: flex; gap: 6px; justify-content: center; margin-top: 14px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.25); }
+.dot.on { background: var(--gold); width: 16px; border-radius: 3px; }
 .sheet .actions button { flex: 1; }
 .pos { color: #8fe0b0; } .neg { color: #f2a5a5; }
 .hint { font-size: 12px; opacity: .7; margin-top: 6px; }

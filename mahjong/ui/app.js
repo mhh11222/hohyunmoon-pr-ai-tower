@@ -12,6 +12,7 @@ import { makeBot } from "../src/bot.js";
 import { isWinningHand } from "../src/hand.js";
 import { tileName, SEATS } from "../src/tiles.js";
 import { coachHand, tileNote, mnemonic, MNEMONICS } from "./coach.js";
+import { RULE_CARDS, cardHTML } from "./rulecards.js";
 import { render, showSheet, hideSheet, resultSheet, callButtonLabel, seatLabel } from "./view.js";
 import { createTable } from "./table3d.js";
 import { createAudio } from "./sound.js";
@@ -35,6 +36,7 @@ const state = {
   rounds: 4,
   paused: false,
   flash: null,
+  ruleCard: null,   // 룰 카드를 넘겨 보는 중이면 몇 번째인지
   pending: null,   // 일시정지 중 밀린 진행
   undoStack: [],
   timer: null,
@@ -371,15 +373,42 @@ function helpSheet() {
     `<h2>연상 고리</h2>
      <p>외우지 말고 그림으로 기억하세요. 학습 모드에서는 상황마다 이 문장들이 자막에 따라붙습니다.</p>
      ${rows}`,
-    [{ label: "닫기", style: "hot", onClick: () => { hideSheet(); step(); } }]
+    [
+      { label: "닫기", style: "hot", onClick: () => { hideSheet(); step(); } },
+      { label: "기본 룰 다시 보기", style: "ghost", onClick: () => showRuleCard(0) },
+    ]
   );
 }
 
 /* ── 판 끝 ──────────────────────────────────────────── */
 
-function sheet(html, buttons) {
+function sheet(html, buttons, opts) {
   state.sheetButtons = buttons;
-  showSheet(html, buttons);
+  showSheet(html, buttons, opts);
+}
+
+/* ── 기본 룰 카드 ───────────────────────────────────── */
+
+/** 첫 시작 때 넘겨 보는 카드. 언제든 건너뛸 수 있다. */
+function showRuleCard(index) {
+  state.ruleCard = index;
+  const total = RULE_CARDS.length;
+  const last = index === total - 1;
+  sheet(
+    cardHTML(RULE_CARDS[index], index, total),
+    [
+      { label: index === 0 ? "건너뛰기" : "이전", style: "ghost", onClick: () => (index === 0 ? endRules() : showRuleCard(index - 1)) },
+      { label: last ? "시작하기" : "다음", style: "hot", onClick: () => (last ? endRules() : showRuleCard(index + 1)) },
+      ...(index === 0 || last ? [] : [{ label: "건너뛰기", style: "ghost", onClick: endRules }]),
+    ],
+    { row: true }
+  );
+}
+
+function endRules() {
+  state.ruleCard = null;
+  if (state.game) { hideSheet(); return step(); }
+  setupSheet();
 }
 
 function finishHand() {
@@ -467,9 +496,27 @@ function onClick(event) {
   }
 }
 
+/** 좌우로 밀어서도 넘길 수 있게 */
+function swipe() {
+  let startX = null;
+  const overlay = document.getElementById("overlay");
+  overlay.addEventListener("touchstart", (e) => { startX = e.touches[0].clientX; }, { passive: true });
+  overlay.addEventListener("touchend", (e) => {
+    if (startX === null || state.ruleCard === null) return;
+    const dx = e.changedTouches[0].clientX - startX;
+    startX = null;
+    if (Math.abs(dx) < 45) return;
+    const next = state.ruleCard + (dx < 0 ? 1 : -1);
+    if (next < 0) return;
+    if (next >= RULE_CARDS.length) return endRules();
+    showRuleCard(next);
+  }, { passive: true });
+}
+
 export function boot() {
   document.addEventListener("click", onClick);
-  setupSheet();
+  swipe();
+  showRuleCard(0);
 }
 
 export { state };
