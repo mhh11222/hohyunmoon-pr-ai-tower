@@ -21,8 +21,16 @@ import { createTable } from "./table3d.js";
 import { createAudio } from "./sound.js";
 
 export const MODES = {
-  learn: { key: "learn", name: "학습 모드", guide: true, coach: true, undo: true, botDelay: 900, callDelay: 600 },
-  real: { key: "real", name: "실전 모드", guide: false, coach: false, undo: false, botDelay: 420, callDelay: 260 },
+  learn: {
+    key: "learn", name: "학습 모드", guide: true, coach: true, undo: true,
+    botDelay: 1100, callDelay: 700,
+    speed: 1.8, // 3D 모션을 늦춰 실제로 따라할 수 있게
+  },
+  real: {
+    key: "real", name: "실전 모드", guide: false, coach: false, undo: false,
+    botDelay: 420, callDelay: 260,
+    speed: 1,
+  },
 };
 
 const state = {
@@ -93,6 +101,7 @@ async function prepare() {
     document.getElementById("stage").hidden = !state.use3D;
     document.getElementById("center").hidden = state.use3D;
     if (state.use3D) {
+      state.table.setSpeed(state.mode.speed);
       state.table.start();
       addEventListener("resize", () => state.table.resize());
       new ResizeObserver(() => state.table.resize()).observe(document.getElementById("stage"));
@@ -110,6 +119,7 @@ const SCORING = {
 async function newGame(mode) {
   const { playerCount, level, extendedBonuses, allowKong, scoring } = state.setup;
   state.mode = mode;
+  state.table?.setSpeed?.(mode.speed);
   state.rounds = playerCount === 4 ? 4 : 4;
   state.paused = false;
   state.undoStack = [];
@@ -138,17 +148,36 @@ async function ceremony() {
     greetCats();
     return step();
   }
-  const stage = {
-    shuffle: ["패를 섞습니다.", "섞는 중"],
-    wall: ["<b>산(벽)</b>을 2단으로 쌓습니다. 산은 이어진 하나의 담입니다.", "산 쌓기"],
-    dice: ["딜러가 <b>주사위</b>를 굴려 산의 입구를 정합니다.", "주사위"],
-    deal: ["입구부터 <b>벽돌 2개(4장)씩</b> 4바퀴 — 손패 16장, 딜러만 17장.", "배패"],
+  const ordinal = ["", "한", "두", "세", "네"];
+  const stageText = (name, payload) => {
+    if (name === "shuffle") return ["패를 전부 엎어 <b>휘휘 섞습니다</b>. 실제로는 두 손으로 크게 원을 그리며 섞으세요.", "섞는 중"];
+    if (name === "wall") return [
+      `섞은 패를 <b>2단으로 쌓아 산(벽)</b>을 만듭니다. ${g.playerCount}인이니 벽 ${g.playerCount}개 — ` +
+        `아래 칸을 먼저 깔고 위 칸을 얹습니다. 산은 이어진 하나의 담입니다.`,
+      "산 쌓기",
+    ];
+    if (name === "dice" && payload) {
+      const [a, b] = payload.dice;
+      return [
+        `딜러가 주사위를 굴려 <b>${a}+${b}=${payload.sum}</b> — 딜러부터 반시계로 ${payload.sum}자리를 세어 벽을 고르고, ` +
+          `그 벽 오른쪽 끝에서 ${payload.sum}번째 벽돌 뒤가 <b>입구</b>가 됩니다. 뽑기는 여기서 시작합니다.`,
+        `주사위 ${a}+${b}=${payload.sum}`,
+      ];
+    }
+    if (name === "dealRound" && payload) {
+      return [
+        `<b>${ordinal[payload.round]} 바퀴째</b> — 딜러부터 차례로 입구에서 <b>벽돌 2개(4장)씩</b> 가져갑니다.`,
+        `배패 ${payload.round}/4바퀴`,
+      ];
+    }
+    if (name === "dealExtra") return ["4바퀴가 끝나면 <b>딜러만 1장 더</b> — 딜러 17장, 나머지 16장.", "딜러 +1장"];
+    return [];
   };
   state.buttons = [];
   await state.table.newHand(g, {
     humanSeat: state.human,
-    onStage: (name) => {
-      const [full, terse] = stage[name] || [];
+    onStage: (name, payload) => {
+      const [full, terse] = stageText(name, payload);
       if (full) { say(full, terse); render(state); }
     },
   });
@@ -414,6 +443,7 @@ function toggleSfx() {
 
 function switchMode() {
   state.mode = state.mode === MODES.learn ? MODES.real : MODES.learn;
+  table()?.setSpeed(state.mode.speed);
   if (!state.mode.undo) state.undoStack = [];
   state.flash = `<b>${state.mode.name}</b>로 바꿨습니다.`;
   step();
