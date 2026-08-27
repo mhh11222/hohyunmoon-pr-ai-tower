@@ -14,7 +14,9 @@ import { tileName, SEATS } from "../src/tiles.js";
 import { coachHand, tileNote, mnemonic, MNEMONICS } from "./coach.js";
 import { RULE_CARDS, cardHTML } from "./rulecards.js";
 import { seatCats, emoteFor } from "./cats.js";
-import { render, showSheet, hideSheet, resultSheet, callButtonLabel, seatLabel } from "./view.js";
+import {
+  render, showSheet, hideSheet, resultSheet, callButtonLabel, seatLabel, exchangeSheetHTML,
+} from "./view.js";
 import { createTable } from "./table3d.js";
 import { createAudio } from "./sound.js";
 
@@ -40,7 +42,14 @@ const state = {
   ruleCard: null,   // 룰 카드를 넘겨 보는 중이면 몇 번째인지
   cats: [],         // seat → 고양이 (내 자리는 null)
   emotes: {},       // seat → 지금 띄운 말풍선
-  setup: { playerCount: 2, level: LEVEL.BEGINNER, extendedBonuses: false, allowKong: false },
+  setup: {
+    playerCount: 2,
+    level: LEVEL.BEGINNER,
+    extendedBonuses: false,
+    allowKong: false,
+    scoring: "10+10",   // 기본점+보너스점: 10+10 / 30+10 / 10+20
+    rate: 100,          // 환율: 10점당 원
+  },
   pending: null,   // 일시정지 중 밀린 진행
   undoStack: [],
   timer: null,
@@ -91,8 +100,15 @@ async function prepare() {
   }
 }
 
+/** 점수 설정 문자열 → 기본점·보너스점 */
+const SCORING = {
+  "10+10": { basePoint: 10, bonusPoint: 10, label: "기본 10점 + 보너스당 10점 (권장)" },
+  "30+10": { basePoint: 30, bonusPoint: 10, label: "기본 30점 + 보너스당 10점 — 판마다 굵직하게" },
+  "10+20": { basePoint: 10, bonusPoint: 20, label: "기본 10점 + 보너스당 20점 — 보너스가 무겁게" },
+};
+
 async function newGame(mode) {
-  const { playerCount, level, extendedBonuses, allowKong } = state.setup;
+  const { playerCount, level, extendedBonuses, allowKong, scoring } = state.setup;
   state.mode = mode;
   state.rounds = playerCount === 4 ? 4 : 4;
   state.paused = false;
@@ -100,7 +116,7 @@ async function newGame(mode) {
   state.game = createGame({
     playerCount,
     seed: (Date.now() % 1e9) | 0,
-    options: { extendedBonuses, allowKong },
+    options: { extendedBonuses, allowKong, ...SCORING[scoring] },
   });
   state.bots = Array.from({ length: playerCount }, () => makeBot(level));
   state.cats = seatCats(playerCount, state.human);
@@ -489,20 +505,41 @@ function finishHand() {
 function showFinal() {
   const g = state.game;
   const rows = g.result.totals
-    .map((t) => `<div class="row"><span>${seatLabel(g, t.seat)}${t.seat === state.human ? " (나)" : ""}</span>
+    .map((t) => `<div class="row"><span>${t.seat === state.human ? "나" : (state.cats[t.seat]?.name ?? "") + " 🐈"}
+      <span class="dim">${seatLabel(g, t.seat)}</span></span>
       <b>${t.total}점 <span class="${t.delta >= 0 ? "pos" : "neg"}">${t.delta >= 0 ? "+" : ""}${t.delta}</span></b></div>`)
     .join("");
   sheet(
-    `<h2>${state.rounds}판 정산</h2><p>손익 = 지금 산가지 − 시작액 ${g.bank.startingValue}점.</p>${rows}
-     <p class="hint">환전(점수 → 돈) 화면은 STEP F에서 붙습니다.</p>`,
-    [{ label: "새 게임", style: "hot", onClick: setupSheet }]
+    `<h2>${state.rounds}판 정산</h2><p>손익 = 지금 산가지 − 시작액 ${g.bank.startingValue}점.</p>${rows}`,
+    [
+      { label: "환전하기 💰", style: "hot", onClick: exchangeScreen },
+      { label: "새 게임", style: "ghost", onClick: setupSheet },
+    ]
+  );
+}
+
+/** 환전 화면 — 환율을 바꿔 가며 돈으로 본다 */
+const RATES = [10, 100, 1000];
+
+function exchangeScreen() {
+  const g = state.game;
+  const rate = state.setup.rate;
+  const rateButtons = RATES.map((r) => `<button class="opt ${state.setup.rate === r ? "picked" : ""}"
+    data-set="rate:${r}">10점=${r.toLocaleString("ko-KR")}원</button>`).join("");
+  sheet(
+    exchangeSheetHTML(g, state.cats, state.human, rate) +
+      `<div class="optrow"><span class="optlabel">환율</span>${rateButtons}</div>`,
+    [
+      { label: "새 게임", style: "hot", onClick: setupSheet },
+      { label: "정산으로", style: "ghost", onClick: showFinal },
+    ]
   );
 }
 
 /* ── 시작 화면 ──────────────────────────────────────── */
 
 function setupSheet() {
-  const { playerCount, level, extendedBonuses, allowKong } = state.setup;
+  const { playerCount, level, extendedBonuses, allowKong, scoring } = state.setup;
   const catLine = { 2: "포도가 상대합니다", 3: "감자·포도가 상대합니다", 4: "포도·감자·막내 셋 다 나옵니다" }[playerCount];
   const pick = (cond) => (cond ? "picked" : "");
   sheet(
@@ -520,7 +557,11 @@ function setupSheet() {
        <button class="opt ${pick(extendedBonuses)}" data-set="extendedBonuses:!">확장 보너스</button>
        <button class="opt ${pick(allowKong)}" data-set="allowKong:!">깡</button>
      </div>
-     <p class="hint optnote">확장 보너스 = 混一色·碰碰胡·清一色·大三元… 익숙해지면 켜세요. 깡도 옵션입니다.</p>`,
+     <p class="hint optnote">확장 보너스 = 混一色·碰碰胡·清一色·大三元… 익숙해지면 켜세요. 깡도 옵션입니다.</p>
+     <div class="optrow"><span class="optlabel">점수</span>
+       ${Object.keys(SCORING).map((k) => `<button class="opt ${pick(scoring === k)}" data-set="scoring:${k}">${k.replace("+", " / ")}</button>`).join("")}
+     </div>
+     <p class="hint optnote">${SCORING[scoring].label}</p>`,
     [
       {
         label: `<b>🎓 학습 모드</b><span>매 단계 자막 · 손패 코치 · 텐파이 표시 · 연상 고리 · 한 수 물리기</span>`,
@@ -540,8 +581,9 @@ function setupSheet() {
 function onSetupOption(button) {
   const [key, raw] = button.dataset.set.split(":");
   if (raw === "!") state.setup[key] = !state.setup[key];
-  else state.setup[key] = key === "playerCount" ? Number(raw) : raw;
-  setupSheet();
+  else state.setup[key] = ["playerCount", "rate"].includes(key) ? Number(raw) : raw;
+  if (key === "rate") exchangeScreen();
+  else setupSheet();
 }
 
 /* ── 입력 ───────────────────────────────────────────── */

@@ -4,7 +4,7 @@ import { tileHTML, tilesHTML } from "./tileface.js";
 import { SEATS, tileName } from "../src/tiles.js";
 import { PHASE } from "../src/game.js";
 import { mnemonic } from "./coach.js";
-import { purseValue } from "../src/sticks.js";
+import { purseValue, exchange } from "../src/sticks.js";
 
 const CALL_LABEL = { pong: "펑", chow: "치", kong: "깡", win: "완성!" };
 const SEAT_KO = { east: "동", south: "남", west: "서", north: "북" };
@@ -195,6 +195,34 @@ function totalsHTML(game, human) {
     .map((t) => `<div class="row"><span>${seatLabel(game, t.seat)}${t.seat === human ? " (나)" : ""}</span>
       <b>${t.total}점 <span class="${t.delta >= 0 ? "pos" : "neg"}">${t.delta >= 0 ? "+" : ""}${t.delta}</span></b></div>`)
     .join("")}</div>`;
+}
+
+/** 돈 표기 — 1,200원 / -300원 */
+export function formatMoney(amount, currency = "원") {
+  const sign = amount < 0 ? "-" : amount > 0 ? "+" : "";
+  return `${sign}${Math.abs(amount).toLocaleString("ko-KR")}${currency}`;
+}
+
+/**
+ * 환전 화면 — 산가지 손익을 돈으로 바꿔 보여 준다 (계산·표시만, 실제 결제 아님).
+ * rate = 10점당 원. 순수 문자열 조립이라 테스트할 수 있다.
+ */
+export function exchangeSheetHTML(game, cats, human, rate) {
+  const rows = exchange(game.bank, { pointsPerUnit: 10, moneyPerUnit: rate })
+    .map((r) => {
+      const name = r.seat === human ? "나" : (cats?.[r.seat]?.name ?? `${r.seat}번`);
+      return `<div class="row"><span>${name}${cats?.[r.seat] ? " 🐈" : ""}</span>
+        <b>${r.delta >= 0 ? "+" : ""}${r.delta}점 →
+        <span class="${r.money >= 0 ? "pos" : "neg"}">${formatMoney(r.money)}</span></b></div>`;
+    })
+    .join("");
+  return `
+    <h2>환전 💰</h2>
+    <p>산가지 손익을 돈으로 바꿔 봅니다. <b>10점 = ${rate.toLocaleString("ko-KR")}원</b>
+    (계산·표시만, 실제 결제가 아닙니다).</p>
+    ${rows}
+    <p class="hint">환율은 아래 버튼으로 바꿀 수 있습니다. 손익 합계는 언제나 0이라
+    누가 딴 만큼 누가 잃습니다.</p>`;
 }
 
 export function showSheet(html, buttons, { row = false } = {}) {
