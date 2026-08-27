@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0d3b2b">
+<title>대만마작 학습용 게임</title>
+<meta name="description" content="대만마작(16장) 학습용 시뮬레이터 — 정석 절차를 눈으로 보며 배웁니다.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23f4efe2'/%3E%3Ctext x='16' y='24' font-size='22' text-anchor='middle' fill='%23b3282d'%3E%E4%B8%AD%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="ui/style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>대만마작 학습</h1>
+    <div id="hud"></div>
+  </header>
+  <p id="subtitle"></p>
+  <div id="opponents"></div>
+  <div id="center"></div>
+  <section class="seat" id="me"></section>
+  <div id="actions"></div>
+</div>
+<div id="overlay"></div>
+<script type="module">
+  import { boot } from "./ui/app.js";
+  boot();
+</script>
+</body>
+</html>

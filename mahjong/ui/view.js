@@ -1,0 +1,162 @@
+// 화면 그리기 — 게임 상태를 읽기만 하고 절대 바꾸지 않는다.
+
+import { tileHTML, tilesHTML } from "./tileface.js";
+import { SEATS, tileName } from "../src/tiles.js";
+import { PHASE } from "../src/game.js";
+import { purseValue } from "../src/sticks.js";
+
+const CALL_LABEL = { pong: "펑", chow: "치", kong: "깡", win: "완성!" };
+const SEAT_KO = { east: "동", south: "남", west: "서", north: "북" };
+
+export function seatLabel(game, seat) {
+  const name = SEAT_KO[SEATS[seat]];
+  const dealer = seat === game.dealerIndex ? " · 딜러" : "";
+  return `${name}${dealer}`;
+}
+
+function sticksHTML(purse) {
+  const parts = [];
+  for (const v of [100, 50, 10]) {
+    if (!purse[v]) continue;
+    parts.push(`<span class="stick s${v}"></span><span>×${purse[v]}</span>`);
+  }
+  return `<span class="sticks">${parts.join("")}<b>${purseValue(purse)}점</b></span>`;
+}
+
+function meldsHTML(player, { small = true } = {}) {
+  const melds = player.melds
+    .map((m) => `<span class="meld">${tilesHTML(m.tiles, { extraClass: small ? "small" : "" })}</span>`)
+    .join("");
+  const flowers = player.flowers.length
+    ? `<span class="meld flowers">${tilesHTML(player.flowers, { extraClass: "small" })}</span>`
+    : "";
+  return melds || flowers ? `<div class="melds">${melds}${flowers}</div>` : "";
+}
+
+function riverHTML(player, latest) {
+  const tiles = player.discards
+    .map((t, i) => tileHTML(t, { extraClass: i === player.discards.length - 1 && latest ? "latest" : "" }))
+    .join("");
+  return `<div class="river">${tiles || '<span class="river-label">아직 버린 패 없음</span>'}</div>`;
+}
+
+export function render(state) {
+  const { game, human } = state;
+  const me = game.players[human];
+  const opponents = game.players.filter((p) => p.seat !== human);
+
+  document.getElementById("hud").textContent =
+    `산 ${game.pile.length}장 · ${game.handNumber}판째`;
+
+  document.getElementById("opponents").innerHTML = opponents
+    .map((p) => `
+      <section class="seat ${game.turn === p.seat && game.phase !== PHASE.CALLS ? "active" : ""}">
+        <div class="seat-head">
+          <span class="seat-name"><b>${seatLabel(game, p.seat)}</b> 봇</span>
+          ${sticksHTML(game.bank.players[p.seat])}
+        </div>
+        <div class="hand">${tilesHTML(p.concealed.map(() => "back"), { back: true, extraClass: "small" })}</div>
+        ${meldsHTML(p)}
+      </section>`)
+    .join("");
+
+  const dice = game.log.find((e) => e.type === "dice");
+  const info = `<div class="wallinfo">
+      <div><b>${game.pile.length}</b><span>산에 남은 패</span></div>
+      <div><b>${dice ? dice.dice.join("+") : "-"}</b><span>주사위</span></div>
+      <div><b>${game.handNumber}/${state.rounds}</b><span>판</span></div>
+    </div>`;
+
+  document.getElementById("center").innerHTML = info + opponents
+    .map((p) => `<div class="river-label">${seatLabel(game, p.seat)}가 버린 패</div>${riverHTML(p, game.phase === PHASE.CALLS && game.pending?.from === p.seat)}`)
+    .join("") + `<div class="river-label">내가 버린 패</div>${riverHTML(me, false)}`;
+
+  document.getElementById("me").innerHTML = `
+    <div class="seat-head">
+      <span class="seat-name"><b>${seatLabel(game, human)}</b> 나</span>
+      ${sticksHTML(game.bank.players[human])}
+    </div>
+    ${meldsHTML(me)}
+    <div class="hand mine" id="myHand">${me.concealed
+      .map((t) => tileHTML(t, { extraClass: state.picked === t ? "pick" : "" }))
+      .join("")}</div>`;
+
+  document.getElementById("me").classList.toggle(
+    "active",
+    game.turn === human && game.phase !== PHASE.CALLS
+  );
+  document.getElementById("subtitle").innerHTML = state.subtitle || "";
+  renderActions(state);
+}
+
+function renderActions(state) {
+  const bar = document.getElementById("actions");
+  bar.innerHTML = state.buttons
+    .map((b, i) => `<button class="${b.style || ""}" data-idx="${i}">${b.label}</button>`)
+    .join("");
+}
+
+export function callButtonLabel(call) {
+  if (call.type === "chow") return `치 (${call.tiles.map(tileName).join("")})`;
+  return CALL_LABEL[call.type] || call.type;
+}
+
+/** 완성 화면 */
+/** 묶음 하나를 이름표와 함께 — 무엇이 계단이고 무엇이 세쌍둥이인지 눈에 보이게 */
+function setBox(tiles, caption, open = false) {
+  return `<span class="setbox ${open ? "open" : ""}">
+    <span class="meld">${tilesHTML(tiles, { extraClass: "small" })}</span>
+    <span class="cap">${caption}</span></span>`;
+}
+
+function setCaption(tiles) {
+  return tiles[0] === tiles[1] && tiles[1] === tiles[2] ? "세쌍둥이" : "계단";
+}
+
+/** 완성 화면 */
+export function resultSheet(game, human) {
+  const r = game.result;
+  if (!r || r.winner === null || r.winner === undefined) {
+    return `<h2>유국</h2><p>산이 떨어져 아무도 완성하지 못했습니다. 딜러는 그대로입니다.</p>
+      ${totalsHTML(game, human)}`;
+  }
+  const winnerIsMe = r.winner === human;
+  const how = r.isSelfDraw
+    ? "<b>직접 뽑아</b> 이겼습니다 — 나머지 전원이 냅니다"
+    : `${seatLabel(game, r.discarder)}가 버린 <b>${tileName(r.winningTile)}</b>로 이겼습니다 — 총 쏜 사람이 혼자 물어냅니다`;
+  const { basePoint, bonusPoint } = game.options;
+  const boxes = [
+    ...game.players[r.winner].melds.map((m) => setBox(m.tiles, `${setCaption(m.tiles)} · 공개`, true)),
+    ...r.decomposition.sets.map((st) => setBox(st.tiles, setCaption(st.tiles))),
+    setBox(r.decomposition.pair, "짝"),
+  ].join("");
+
+  return `
+    <h2>${winnerIsMe ? "완성! 🎉" : `${seatLabel(game, r.winner)} 완성`}</h2>
+    <p>${how}</p>
+    <div class="sets">${boxes}</div>
+    <div class="row"><span>기본점</span><b>${basePoint}</b></div>
+    ${r.bonuses.map((b) => `<div class="row"><span>${b.name} (보너스 ${b.value})</span><b>+${b.value * bonusPoint}</b></div>`).join("")}
+    <div class="row"><span><b>받는 점수</b> — 보너스 ${r.bonusTotal}개</span><b>${r.value}점</b></div>
+    ${r.payments.map((p) => `<div class="row"><span>${seatLabel(game, p.from)} → ${seatLabel(game, p.to)}</span><b>${p.amount}점</b></div>`).join("")}
+    ${totalsHTML(game, human)}`;
+}
+
+function totalsHTML(game, human) {
+  return `<div style="margin-top:10px">${game.result.totals
+    .map((t) => `<div class="row"><span>${seatLabel(game, t.seat)}${t.seat === human ? " (나)" : ""}</span>
+      <b>${t.total}점 <span class="${t.delta >= 0 ? "pos" : "neg"}">${t.delta >= 0 ? "+" : ""}${t.delta}</span></b></div>`)
+    .join("")}</div>`;
+}
+
+export function showSheet(html, buttons) {
+  const overlay = document.getElementById("overlay");
+  overlay.innerHTML = `<div class="sheet">${html}<div class="actions">${buttons
+    .map((b, i) => `<button class="${b.style || ""}" data-sheet="${i}">${b.label}</button>`)
+    .join("")}</div></div>`;
+  overlay.classList.add("on");
+}
+
+export function hideSheet() {
+  document.getElementById("overlay").classList.remove("on");
+}
