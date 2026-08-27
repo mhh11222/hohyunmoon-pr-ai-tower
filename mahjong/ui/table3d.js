@@ -15,6 +15,42 @@ const TABLE = { w: 2.4, d: 2.4 };
 // 기준 틀(내 자리, 아래쪽)에서의 거리들
 const BASE = { hand: 0.8, wall: 0.58, meld: 0.38, river: 0.13, sticks: [0.9, 0.56] };
 
+/**
+ * 벽마다 벽돌(2장 기둥) 몇 개인지 — 엔진 buildWalls와 같은 고른 분배.
+ * 2인 100장 → 25/25, 4인 140장 → 18/18/17/17.
+ */
+export function wallCounts(total, walls) {
+  const counts = [];
+  let left = total / 2;
+  for (let w = 0; w < walls; w++) {
+    const size = Math.ceil(left / (walls - w));
+    counts.push(size);
+    left -= size;
+  }
+  return counts;
+}
+
+/**
+ * 뽑기 순서 → 물리적 자리. 엔진 drawOrderFrom과 같은 순서다:
+ * 입구 벽돌부터 (위 칸 → 아래 칸), 벽을 돌아, 입구 앞에 건너뛴 벽돌들이 맨 뒤.
+ * 그래서 산은 인원수대로 고르게 서 있고, 소비는 입구에서 시작해 담을 따라 돈다.
+ */
+export function computeWallSequence(total, walls, opening = { wallIndex: 0, stackIndex: 0 }) {
+  const counts = wallCounts(total, walls);
+  const seq = [];
+  const pushStack = (wall, stack) => {
+    seq.push({ wall, stack, tier: 1 });
+    seq.push({ wall, stack, tier: 0 });
+  };
+  for (let k = opening.stackIndex; k < counts[opening.wallIndex]; k++) pushStack(opening.wallIndex, k);
+  for (let w = 1; w < walls; w++) {
+    const wall = (opening.wallIndex + w) % walls;
+    for (let k = 0; k < counts[wall]; k++) pushStack(wall, k);
+  }
+  for (let k = 0; k < opening.stackIndex; k++) pushStack(opening.wallIndex, k);
+  return { counts, seq };
+}
+
 /** 그 눈이 위를 보게 하는 회전 (면 배치 [3,4,1,6,2,5] 기준) */
 const UP_ROTATION = {
   1: [0, 0, 0],
@@ -112,6 +148,7 @@ export async function createTable(canvas, { sound = null } = {}) {
 
   const sideMat = new THREE.MeshStandardMaterial({ color: 0xefe8d6, roughness: 0.55 });
   const backMat = new THREE.MeshStandardMaterial({ color: 0xc99e5f, roughness: 0.55 }); // 대나무 등판
+  const backMatLow = new THREE.MeshStandardMaterial({ color: 0x8f6c3a, roughness: 0.6 }); // 아래 칸 — 그늘진 대나무
   const tileGeo = new THREE.BoxGeometry(TILE.w, TILE.d, TILE.h);
   const pool = [];
 
@@ -237,6 +274,13 @@ export async function createTable(canvas, { sound = null } = {}) {
   /* ── 상태 ─────────────────────────────────────────── */
 
   const timeline = new Timeline();
+  let speed = 1; // 1 = 실전. 학습 모드는 1.6~2로 늦춰 전 과정을 눈으로 따라가게 한다.
+
+  /** 아무것도 안 하고 잠깐 쉰다 (speed의 영향을 받는다) */
+  function pause(seconds) {
+    timeline.add(tween({ duration: seconds }));
+    return settle();
+  }
   let wallTiles = [];   // 산 — 뽑기 순서대로
   let rivers = [];      // side → 버림패
   let melds = [];       // side → 공개 묶음 패들
@@ -285,22 +329,6 @@ export async function createTable(canvas, { sound = null } = {}) {
   function meldSpot(side, meldIndex, tileIndex) {
     const groupX = -0.62 + meldIndex * (TILE.w * 3.3);
     return orient(groupX + tileIndex * (TILE.w + 0.004), TILE.d / 2, BASE.meld, side);
-  }
-
-  function wallSpot(index, total) {
-    const perWall = Math.ceil(total / sideCount);
-    const wall = Math.min(Math.floor(index / perWall), sideCount - 1);
-    const within = index - wall * perWall;
-    const stacks = Math.ceil(perWall / 2);
-    const stackIndex = Math.floor(within / 2);
-    const tier = within % 2 === 0 ? 1 : 0; // 위 칸 먼저 뽑는다
-    const spread = Math.min(TILE.w + 0.006, 1.06 / stacks);
-    return orient(
-      (stackIndex - (stacks - 1) / 2) * spread,
-      TILE.d / 2 + tier * TILE.d,
-      BASE.wall,
-      wall
-    );
   }
 
   function handSpot(side, index, count) {
@@ -375,46 +403,121 @@ export async function createTable(canvas, { sound = null } = {}) {
     await settle();
     for (const mesh of swirl) recycle(mesh);
 
-    // 2) 산 쌓기 — 인원수만큼의 벽을 2단으로
+    // 2) 산 쌓기 — 인원수만큼의 벽을 아래 칸부터 2단으로.
+    //    엔진이 정한 입구(주사위) 기준의 뽑기 순서를 그대로 물리 자리에 맞춘다.
     onStage?.("wall");
-    for (let i = 0; i < total; i++) {
-      const mesh = makeTile(null);
-      const to = wallSpot(i, total);
-      mesh.position.set(0, 0.5, 0);
-      faceSide(mesh, Math.min(Math.floor(i / Math.ceil(total / sideCount)), sideCount - 1));
-      wallTiles.push(mesh);
-      move(mesh, to, { duration: 0.34, delay: i * 0.005, height: 0.05, onDone: i % 9 === 0 ? say : undefined });
-    }
-    await settle();
-
-    // 3) 주사위 — 딜러 손이 던진다
     const roll = game.log.find((e) => e.type === "dice");
-    if (roll) { onStage?.("dice", roll); await rollDice(roll.dice, seatSide(game.dealerIndex)); }
+    const opening = roll?.opening ?? { wallIndex: 0, stackIndex: 0 };
+    const { counts, seq } = computeWallSequence(total, sideCount, opening);
 
-    // 4) 배패 — 상대들 손패는 뒷면으로 세워 놓고, 내 몫은 화면 아래로
-    onStage?.("deal");
-    sound?.sfx?.clack?.(0, { gain: 0.5 });
-    let delay = 0;
-    for (const player of game.players) {
-      const side = seatSide(player.seat);
-      const count = player.concealed.length;
-      for (let i = 0; i < count; i++) {
-        const mesh = takeFromWall();
-        if (!mesh) break;
-        if (side === 0) {
-          move(mesh, orient((i - count / 2) * 0.05, 0.02, 1.5, 0), {
-            duration: 0.36, delay: delay + i * 0.02, height: 0.24,
-            onDone: () => recycle(mesh),
+    function wallPos(entry) {
+      const stacks = counts[entry.wall];
+      const spread = Math.min(TILE.w + 0.006, 1.06 / stacks);
+      return orient(
+        (entry.stack - (stacks - 1) / 2) * spread,
+        TILE.d / 2 + entry.tier * TILE.d,
+        BASE.wall,
+        seatSide(entry.wall)
+      );
+    }
+
+    // 쌓는 모션은 물리 순서(벽마다 왼쪽부터, 아래 칸 먼저)
+    const buildOrder = seq
+      .map((entry, drawIndex) => ({ ...entry, drawIndex }))
+      .sort((a, b) => a.wall - b.wall || a.stack - b.stack || a.tier - b.tier);
+    wallTiles = new Array(seq.length);
+    buildOrder.forEach((entry, i) => {
+      const mesh = makeTile(null);
+      mesh.material = mesh.material.slice();
+      mesh.material[2] = entry.tier === 0 ? backMatLow : backMat; // 아래 칸은 그늘지게
+      faceSide(mesh, seatSide(entry.wall));
+      mesh.position.set(0, 0.5, 0);
+      wallTiles[entry.drawIndex] = mesh;
+      move(mesh, wallPos(entry), {
+        duration: 0.34,
+        delay: i * 0.009,
+        height: 0.05,
+        onDone: i % 9 === 0 ? say : undefined,
+      });
+    });
+    await settle();
+    await pause(0.5);
+
+    // 3) 주사위 — 딜러 손이 던진다. 눈이 나온 뒤 잠깐 멈춰 읽을 시간을 준다.
+    if (roll) {
+      onStage?.("dice", roll);
+      await rollDice(roll.dice, seatSide(game.dealerIndex));
+      await pause(0.9);
+    }
+
+    // 4) 배패 — 실제 순서 그대로: 딜러부터 반시계로 돌며 각자 자기 손으로
+    //    벽돌 2개(4장)씩 산 입구에서 집어 간다. 4바퀴 뒤 딜러만 1장 더.
+    const order = Array.from({ length: sideCount }, (_, n) => (game.dealerIndex + n) % sideCount);
+    const handTotal = {};
+    for (const player of game.players) handTotal[player.seat] = player.concealed.length;
+
+    for (let round = 0; round < 4; round++) {
+      onStage?.("dealRound", { round: round + 1 });
+      for (const seat of order) {
+        const side = seatSide(seat);
+        const grabbed = [];
+        for (let k = 0; k < 4; k++) {
+          const mesh = takeFromWall();
+          if (!mesh) break;
+          grabbed.push(mesh);
+        }
+        if (!grabbed.length) break;
+        const grabAt = grabbed[0].position.clone();
+        grabbed.forEach((mesh, k) => {
+          const index = round * 4 + k;
+          let to;
+          if (side === 0) {
+            to = orient((index - 8) * 0.055, 0.02, 1.5, 0);
+          } else {
+            hands[side].push(mesh);
+            faceSide(mesh, side, -Math.PI / 2.2);
+            to = handSpot(side, index, 16);
+          }
+          move(mesh, to, {
+            duration: 0.5,
+            delay: k * 0.08,
+            height: 0.16,
+            onDone: () => {
+              sound?.sfx?.clack?.(0, { gain: 0.5 });
+              if (side === 0) recycle(mesh);
+            },
           });
-        } else {
+        });
+        // 그 자리 손이 함께 움직인다 (빈손으로 산까지 갔다 돌아온다)
+        handCarry(side, null, grabAt, { duration: 0.55, grabAt });
+        await settle();
+        await pause(0.18);
+      }
+      await pause(0.3);
+    }
+
+    // 딜러의 17번째 한 장
+    onStage?.("dealExtra");
+    {
+      const side = seatSide(game.dealerIndex);
+      const mesh = takeFromWall();
+      if (mesh) {
+        const to = side === 0
+          ? orient(0, 0.02, 1.5, 0)
+          : handSpot(side, 16, 17);
+        if (side !== 0) {
           hands[side].push(mesh);
           faceSide(mesh, side, -Math.PI / 2.2);
-          move(mesh, handSpot(side, i, count), { duration: 0.3, delay: delay + i * 0.02, height: 0.2 });
+          reflowHand(side);
         }
-        if (i % 4 === 0) sound?.sfx?.clack?.(delay + i * 0.02, { gain: 0.4 });
+        handCarry(side, mesh, to, {
+          duration: 0.55,
+          onDone: () => { if (side === 0) recycle(mesh); },
+        });
+        await settle();
       }
-      delay += count * 0.02 + 0.15;
     }
+
     await settle();
     parkDice();
   }
@@ -617,10 +720,25 @@ export async function createTable(canvas, { sound = null } = {}) {
     rivers = Array.from({ length: sideCount }, () => []);
     melds = Array.from({ length: sideCount }, () => []);
     hands = Array.from({ length: sideCount }, () => []);
-    for (let i = 0; i < game.pile.length; i++) {
-      const mesh = makeTile(null);
-      mesh.position.copy(wallSpot(i, game.pile.length));
-      wallTiles.push(mesh);
+    {
+      const total = game.pile.length;
+      const { counts, seq } = computeWallSequence(total + (total % 2), sideCount);
+      for (let i = 0; i < total; i++) {
+        const entry = seq[i];
+        const stacks = counts[entry.wall];
+        const spread = Math.min(TILE.w + 0.006, 1.06 / stacks);
+        const mesh = makeTile(null);
+        mesh.material = mesh.material.slice();
+        mesh.material[2] = entry.tier === 0 ? backMatLow : backMat;
+        faceSide(mesh, seatSide(entry.wall));
+        mesh.position.copy(orient(
+          (entry.stack - (stacks - 1) / 2) * spread,
+          TILE.d / 2 + entry.tier * TILE.d,
+          BASE.wall,
+          seatSide(entry.wall)
+        ));
+        wallTiles.push(mesh);
+      }
     }
     for (const player of game.players) {
       const side = seatSide(player.seat);
@@ -649,11 +767,11 @@ export async function createTable(canvas, { sound = null } = {}) {
     }
   }
 
-  /** 남은 산 길이를 게임 상태에 맞춘다 */
+  /** 남은 산 길이를 게임 상태에 맞춘다 — 꽃·깡 보충은 담 뒤쪽에서 나간다 */
   function sync(game) {
     const target = game.pile.length;
     while (wallTiles.length > target) {
-      const mesh = takeFromWall();
+      const mesh = wallTiles.pop();
       if (mesh) recycle(mesh);
     }
   }
@@ -682,7 +800,7 @@ export async function createTable(canvas, { sound = null } = {}) {
     if (!running) return;
     const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
     last = now;
-    timeline.update(dt);
+    timeline.update(dt / speed);
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }
@@ -697,6 +815,7 @@ export async function createTable(canvas, { sound = null } = {}) {
 
   return {
     ok: true,
+    setSpeed(x) { speed = Math.max(0.5, x); },
     start,
     stop() { running = false; },
     resize,
