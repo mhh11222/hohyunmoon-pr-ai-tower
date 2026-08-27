@@ -100,7 +100,9 @@ export function render(state) {
       ${sticksHTML(game.bank.players[human])}
     </div>
     ${meldsHTML(me)}
-    <div class="hand mine" id="myHand">${me.concealed
+    <div class="hand mine" id="myHand">${(state.handReveal == null
+      ? me.concealed
+      : me.concealed.slice(0, state.handReveal))
       .map((t, i) => tileHTML(t, { extraClass: state.picked?.index === i ? "pick" : "", index: i }))
       .join("")}</div>`;
 

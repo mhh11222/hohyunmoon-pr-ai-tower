@@ -62,6 +62,7 @@ const state = {
   undoStack: [],
   timer: null,
   drag: null,          // 길게 눌러 옮기는 중인 패 { index }
+  handReveal: null,    // 배패 중이면 지금까지 받은 장수 (null = 전부 보임)
   suppressClick: false,
   table: null,      // 3D 테이블 (없으면 2D로 돈다)
   use3D: false,
@@ -188,17 +189,96 @@ async function ceremony() {
     return [];
   };
   state.buttons = [];
+  state.handReveal = 0; // 배패 전 — 내 손은 아직 비어 있다
+  render(state);
+
+  const who2 = who;
+
+  /** 의식의 매듭 — 학습 모드면 중앙 팝업으로 멈추고, 계속을 눌러야 진행 */
+  const gate = (name, payload) => {
+    if (!state.mode.guide) return; // 실전 모드는 자막만으로 흘러간다
+    const html = gateHTML(name, payload, g, who2);
+    if (!html) return;
+    return new Promise((resolve) => {
+      sheet(html, [{ label: "계속 ▶", style: "hot", onClick: () => { hideSheet(); resolve(); } }]);
+    });
+  };
+
   await state.table.newHand(g, {
     humanSeat: state.human,
     cats: state.cats,
+    onGate: gate,
     onStage: (name, payload) => {
+      if (name === "dealGrab") {
+        if (payload.seat === state.human) {
+          state.handReveal = Math.min(
+            (state.handReveal ?? 0) + payload.count,
+            g.players[state.human].concealed.length
+          );
+          render(state);
+        }
+        return;
+      }
       const [full, terse] = stageText(name, payload);
       if (full) { say(full, terse); render(state); }
     },
   });
+  state.handReveal = null; // 배패 끝 — 손패 전부 공개·정렬 상태
   announceDeal();
   greetCats();
   step();
+}
+
+/** 게이트 팝업 내용 — "무엇이 나왔고, 무슨 뜻이고, 다음은 무엇" */
+function gateHTML(name, payload, g, who) {
+  const dealer = who(g.dealerIndex);
+  if (name === "dealerRoll") {
+    const [a, b] = payload.dice;
+    const chain = Array.from({ length: payload.sum }, (_, i) => {
+      const seat = i % g.playerCount;
+      return `${who(seat)}<i>(${i + 1})</i>`;
+    }).join(" → ");
+    return `<h2>🎲 첫 딜러 뽑기</h2>
+      <p>첫 판의 주사위는 <b>판을 준비한 사람(나)</b>이 굴리는 게 관례입니다.</p>
+      <p>주사위가 <b>${a} + ${b} = ${payload.sum}</b>.
+      굴린 사람인 <b>나를 1로 놓고 반시계로</b> ${payload.sum}까지 셉니다:</p>
+      <p class="chain">${chain}</p>
+      <p>${payload.sum}번째가 <b>${dealer}</b> — 그래서 <b>${dealer}가 첫 딜러(동)</b>입니다.
+      딜러는 17장을 받고 첫 패를 버리며 판을 엽니다.</p>
+      <p class="hint">다음 — 패 ${g.playerCount === 4 ? 140 : g.playerCount === 3 ? 104 : 100}장을 전부 엎어 섞습니다.</p>`;
+  }
+  if (name === "wall") {
+    const walls = payload.counts
+      .map((n, i) => `${who(i)} 앞에 벽돌 ${n}개`)
+      .join(" · ");
+    return `<h2>🧱 산(벽)을 다 쌓았습니다</h2>
+      <p>섞은 패를 <b>2단으로</b> 쌓아 각자 앞에 담을 만들었습니다.
+      ${g.playerCount}인이라 벽 ${g.playerCount}개 — ${walls} (벽돌 1개 = 위아래 2장).</p>
+      <p>이 담들은 이어진 <b>하나의 산</b>입니다. 어디서부터 뜯을지는 딜러의 주사위가 정합니다.</p>
+      <p class="hint">다음 — 딜러 ${dealer}가 주사위 2개를 굴려 <b>산의 입구</b>를 정합니다.</p>`;
+  }
+  if (name === "opening") {
+    const [a, b] = payload.dice;
+    const wallOwner = who(payload.opening.wallIndex);
+    return `<h2>🎲 산의 입구 정하기</h2>
+      <p>딜러 <b>${dealer}</b>가 굴려 <b>${a} + ${b} = ${payload.sum}</b>.</p>
+      <p>① 딜러 자신부터 반시계로 ${payload.sum}자리를 세면 → <b>${wallOwner}의 벽</b><br>
+      ② 그 벽 <b>오른쪽 끝에서 ${payload.sum}번째 벽돌</b> 뒤가 <b>산의 입구</b>가 됩니다.</p>
+      <p>패는 입구에서 시작해 담을 따라 돌며 뜯고, 꽃·깡 보충은 반대쪽(담 뒤)에서 가져옵니다.
+      이 의식 덕분에 아무도 어느 패가 어디 있는지 알 수 없습니다.</p>
+      <p class="hint">다음 — 배패. 딜러 ${dealer}부터 반시계로 <b>벽돌 2개(4장)씩</b> 4바퀴 가져갑니다.
+      내 패는 가져올 때마다 아래에 쌓입니다.</p>`;
+  }
+  if (name === "dealt") {
+    return `<h2>🀄 배패 끝</h2>
+      <p>모두 <b>16장</b>, 딜러 <b>${dealer}</b>만 <b>17장</b>을 받았습니다.
+      손에 꽃이 있으면 눕혀 두고 담 뒤에서 1장씩 보충했습니다.</p>
+      <p>손패는 통 → 삭 → 만 → 바람 → 삼원 순으로 <b>정렬</b>해 둡니다.
+      (길게 눌러 끌면 언제든 직접 배열로 바꿀 수 있습니다.)</p>
+      <p class="hint">이제 <b>본게임</b> — 딜러 ${dealer}가 첫 패를 버리며 시작합니다.
+      여기부터는 위쪽 자막으로만 설명합니다.</p>`;
+  }
+  return null;
 }
 
 function announceDeal() {
