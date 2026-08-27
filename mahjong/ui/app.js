@@ -156,6 +156,7 @@ async function ceremony() {
         `아래 칸을 먼저 깔고 위 칸을 얹습니다. 산은 이어진 하나의 담입니다.`,
       "산 쌓기",
     ];
+    if (name === "camera") return ["산이 다 섰습니다. 이제 자리에 앉아 <b>상대를 마주 보고</b> 칩니다.", "착석"];
     if (name === "dice" && payload) {
       const [a, b] = payload.dice;
       return [
@@ -176,6 +177,7 @@ async function ceremony() {
   state.buttons = [];
   await state.table.newHand(g, {
     humanSeat: state.human,
+    cats: state.cats,
     onStage: (name, payload) => {
       const [full, terse] = stageText(name, payload);
       if (full) { say(full, terse); render(state); }
@@ -421,7 +423,7 @@ function undo() {
   clearTimeout(state.timer);
   state.pending = null;
   restoreGame(state.game, snap);
-  table()?.rebuild(state.game, state.human);
+  table()?.rebuild(state.game, state.human, state.cats);
   state.picked = null;
   state.note = null;
   state.flash = "<b>한 수 물렸습니다.</b> 다시 골라 보세요.";

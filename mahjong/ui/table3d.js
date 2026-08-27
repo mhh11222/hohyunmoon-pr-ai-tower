@@ -80,8 +80,45 @@ export async function createTable(canvas, { sound = null } = {}) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 40);
-  camera.position.set(0, 1.82, 1.18);
-  camera.lookAt(0, 0, -0.08);
+  const lookTarget = new THREE.Vector3(0, 0, -0.08);
+
+  /** 의식용 — 산 쌓기가 한눈에 보이는 위에서 본 앵글 */
+  function ceremonyView(count) {
+    return count >= 3
+      ? { pos: new THREE.Vector3(0, 2.0, 1.3), look: new THREE.Vector3(0, 0, -0.08) }
+      : { pos: new THREE.Vector3(0, 1.82, 1.18), look: new THREE.Vector3(0, 0, -0.08) };
+  }
+
+  /** 본게임용 — 상대 얼굴을 보며 치는, 적당히 위에서 내려다보는 앵글 */
+  function playView(count) {
+    return count >= 3
+      ? { pos: new THREE.Vector3(0, 1.18, 1.92), look: new THREE.Vector3(0, 0.08, -0.3) }
+      : { pos: new THREE.Vector3(0, 1.06, 1.78), look: new THREE.Vector3(0, 0.08, -0.32) };
+  }
+
+  function setCam(view) {
+    camera.position.copy(view.pos);
+    lookTarget.copy(view.look);
+    camera.lookAt(lookTarget);
+  }
+
+  /** 카메라가 스르륵 내려간다 */
+  function glideCam(view, duration = 2.4) {
+    const fromPos = camera.position.clone();
+    const fromLook = lookTarget.clone();
+    timeline.add(tween({
+      duration,
+      ease: easeInOutQuad,
+      onUpdate: (t) => {
+        camera.position.lerpVectors(fromPos, view.pos, t);
+        lookTarget.lerpVectors(fromLook, view.look, t);
+        camera.lookAt(lookTarget);
+      },
+    }));
+    return settle();
+  }
+
+  setCam(ceremonyView(2));
 
   scene.add(new THREE.HemisphereLight(0xdfeee6, 0x0a2a1f, 0.9));
   const key = new THREE.DirectionalLight(0xfff6e0, 1.35);
@@ -221,6 +258,125 @@ export async function createTable(canvas, { sound = null } = {}) {
   }
 
   let hands3d = []; // side마다 하나 — newHand에서 만든다
+  let cats3d = [];  // 자리에 앉은 고양이들 — 각자 다른 잔모션으로 움직인다
+
+  /** 저폴리 고양이. kind = podo(작고 졸림) | gamja(하양·시크) | maknae(크고 뚱뚱·두리번) */
+  function buildCat(kind) {
+    const palette = {
+      podo: { body: 0x40312a, patch: 0xa96a35, ear: 0x2e2320, nose: 0x8a4a3a, scale: 0.92 },
+      gamja: { body: 0xf3efe6, patch: null, ear: 0xe8ded6, nose: 0xd88f8f, scale: 1.1 },
+      maknae: { body: 0xf3efe6, patch: 0x8d9096, ear: 0x8d9096, nose: 0xcf8f96, scale: 1.38 },
+    }[kind] || { body: 0xcccccc, patch: null, ear: 0xbbbbbb, nose: 0xcc8888, scale: 1 };
+
+    const bodyMat = new THREE.MeshStandardMaterial({ color: palette.body, roughness: 0.9 });
+    const earMat = new THREE.MeshStandardMaterial({ color: palette.ear, roughness: 0.9 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x14100d, roughness: 0.4 });
+    const noseMat = new THREE.MeshStandardMaterial({ color: palette.nose, roughness: 0.6 });
+
+    const cat = new THREE.Group();
+
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.155, 14, 12), bodyMat);
+    body.scale.set(1, 0.85, 1.12);
+    if (kind === "maknae") body.scale.set(1.22, 0.8, 1.28); // 제일 뚱뚱하다
+    body.position.y = 0.13;
+    cat.add(body);
+
+    // 앞발 두 개
+    for (const dx of [-0.07, 0.07]) {
+      const paw = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), bodyMat);
+      paw.position.set(dx, 0.035, 0.13);
+      cat.add(paw);
+    }
+
+    // 꼬리 — 몸 뒤로 말려 있다
+    const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.022, 0.14, 3, 8), bodyMat);
+    tail.rotation.x = Math.PI / 2.6;
+    tail.rotation.z = 0.7;
+    tail.position.set(0.13, 0.1, -0.13);
+    cat.add(tail);
+
+    // 머리 — 따로 묶어 고개짓을 시킨다
+    const head = new THREE.Group();
+    head.position.set(0, 0.3, 0.06);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.105, 14, 12), bodyMat);
+    skull.scale.set(1.05, 0.95, 0.95);
+    head.add(skull);
+    if (palette.patch) {
+      const patch = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8),
+        new THREE.MeshStandardMaterial({ color: palette.patch, roughness: 0.9 }));
+      patch.scale.set(1.15, 0.8, 0.8);
+      patch.position.set(kind === "maknae" ? -0.055 : 0.045, 0.055, 0.01);
+      head.add(patch);
+    }
+    for (const dx of [-0.058, 0.058]) {
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.065, 8), earMat);
+      ear.position.set(dx, 0.1, -0.01);
+      ear.rotation.z = dx > 0 ? -0.25 : 0.25;
+      head.add(ear);
+    }
+    const eyes = [];
+    for (const dx of [-0.042, 0.042]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.013, 8, 8), dark);
+      eye.position.set(dx, 0.01, 0.093);
+      if (kind === "podo") { eye.scale.y = 0.55; eye.scale.x = 1.3; } // 늘 졸린 실눈
+      head.add(eye);
+      eyes.push(eye);
+    }
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 8), noseMat);
+    nose.position.set(0, -0.03, 0.1);
+    head.add(nose);
+    cat.add(head);
+
+    cat.scale.setScalar(palette.scale);
+    cat.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+    scene.add(cat);
+    return { group: cat, head, tail, eyes, kind, seed: Math.random() * 10 };
+  }
+
+  /**
+   * 각자 성격대로 움직인다 (매 프레임).
+   *   포도: 졸려서 꾸벅꾸벅 + 계속 뒤뚱뒤뚱
+   *   감자: 시크 — 거의 안 움직이고 숨쉬기·꼬리만 살랑, 가끔 느린 깜빡임
+   *   막내: 바보 — 고개만 자꾸 좌우로 이리저리
+   */
+  function animateCats(now) {
+    const t = now / 1000;
+    for (const cat of cats3d) {
+      const k = t + cat.seed;
+      if (cat.kind === "podo") {
+        cat.group.rotation.z = Math.sin(k * 2.1) * 0.09;             // 뒤뚱뒤뚱
+        cat.group.position.y = Math.abs(Math.sin(k * 2.1)) * 0.008;
+        const doze = Math.max(0, Math.sin(k * 0.45));                 // 이따금 꾸벅
+        cat.head.rotation.x = 0.02 + doze * 0.18;
+        cat.head.rotation.z = Math.sin(k * 2.1) * 0.06;
+      } else if (cat.kind === "gamja") {
+        cat.group.scale.y = cat.group.scale.x * (1 + Math.sin(k * 1.1) * 0.012); // 숨만 쉰다
+        cat.tail.rotation.z = 0.7 + Math.sin(k * 0.8) * 0.25;                    // 꼬리만 살랑
+        const blink = (k % 4.7) < 0.18 ? 0.15 : 1;                               // 가끔 천천히 깜빡
+        for (const eye of cat.eyes) eye.scale.y = blink;
+        cat.head.rotation.y = Math.sin(k * 0.13) * 0.08;                          // 아주 가끔 시선만
+      } else if (cat.kind === "maknae") {
+        cat.head.rotation.y = Math.sin(k * 1.4) * 0.55 + Math.sin(k * 3.1) * 0.18; // 두리번두리번
+        cat.head.rotation.x = 0.05 + Math.sin(k * 2.3) * 0.06;
+        cat.group.rotation.z = Math.sin(k * 1.4 + 1) * 0.03;
+      }
+    }
+  }
+
+  /** 인원·배정대로 고양이들을 자리에 앉힌다 */
+  function seatCats3d(catsBySeat) {
+    for (const cat of cats3d) scene.remove(cat.group);
+    cats3d = [];
+    if (!catsBySeat) return;
+    catsBySeat.forEach((info, seat) => {
+      if (!info) return;
+      const side = seatSide(seat);
+      const cat = buildCat(info.key);
+      cat.group.position.copy(orient(0, 0, 1.12, side));
+      cat.group.rotation.y = sideAngle(side) + Math.PI; // 테이블 중앙을 본다
+      cats3d.push(cat);
+    });
+  }
 
   function handRest(side) {
     return orient(0.3, 0.42, 1.5, side);
@@ -358,18 +514,18 @@ export async function createTable(canvas, { sound = null } = {}) {
   }
 
   /** 섞기 → 산 쌓기 → 주사위 → 배패 */
-  async function newHand(game, { humanSeat = 0, onStage = null } = {}) {
+  async function newHand(game, { humanSeat = 0, onStage = null, cats = null } = {}) {
     clearHand();
     sideCount = game.playerCount;
     humanSide = 0;
     seatSide = (seat) => (seat - humanSeat + sideCount) % sideCount;
-    camera.position.set(0, sideCount >= 3 ? 2.0 : 1.82, sideCount >= 3 ? 1.3 : 1.18);
-    camera.lookAt(0, 0, -0.08);
+    setCam(ceremonyView(sideCount));
     rivers = Array.from({ length: sideCount }, () => []);
     melds = Array.from({ length: sideCount }, () => []);
     hands = Array.from({ length: sideCount }, () => []);
     for (const hand of hands3d) scene.remove(hand);
     hands3d = Array.from({ length: sideCount }, (_, s) => buildHand(s !== 0));
+    seatCats3d(cats);
 
     onStage?.("shuffle");
     const total = game.pile.length + game.players.reduce(
@@ -441,7 +597,11 @@ export async function createTable(canvas, { sound = null } = {}) {
       });
     });
     await settle();
-    await pause(0.5);
+    await pause(0.4);
+
+    // 산이 다 섰으니 카메라가 스르륵 내려간다 — 이제 상대 얼굴을 보며 친다
+    onStage?.("camera");
+    await glideCam(playView(sideCount), 2.2);
 
     // 3) 주사위 — 딜러 손이 던진다. 눈이 나온 뒤 잠깐 멈춰 읽을 시간을 준다.
     if (roll) {
@@ -713,10 +873,12 @@ export async function createTable(canvas, { sound = null } = {}) {
   }
 
   /** 상태 그대로 다시 깔기 — 한 수 물린 뒤처럼 화면과 상태가 어긋났을 때 */
-  function rebuild(game, humanSeat = 0) {
+  function rebuild(game, humanSeat = 0, cats = null) {
     clearHand();
     sideCount = game.playerCount;
     seatSide = (seat) => (seat - humanSeat + sideCount) % sideCount;
+    setCam(playView(sideCount));
+    seatCats3d(cats);
     rivers = Array.from({ length: sideCount }, () => []);
     melds = Array.from({ length: sideCount }, () => []);
     hands = Array.from({ length: sideCount }, () => []);
@@ -794,6 +956,7 @@ export async function createTable(canvas, { sound = null } = {}) {
     camera.aspect = w / h;
     camera.fov = h > w ? 52 : 40;
     camera.updateProjectionMatrix();
+    camera.lookAt(lookTarget);
   }
 
   function frame(now) {
@@ -801,6 +964,7 @@ export async function createTable(canvas, { sound = null } = {}) {
     const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
     last = now;
     timeline.update(dt / speed);
+    animateCats(now);
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }
