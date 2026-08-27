@@ -13,6 +13,7 @@ import { isWinningHand } from "../src/hand.js";
 import { tileName, SEATS } from "../src/tiles.js";
 import { coachHand, tileNote, mnemonic, MNEMONICS } from "./coach.js";
 import { RULE_CARDS, cardHTML } from "./rulecards.js";
+import { seatCats, emoteFor } from "./cats.js";
 import { render, showSheet, hideSheet, resultSheet, callButtonLabel, seatLabel } from "./view.js";
 import { createTable } from "./table3d.js";
 import { createAudio } from "./sound.js";
@@ -37,6 +38,8 @@ const state = {
   paused: false,
   flash: null,
   ruleCard: null,   // 룰 카드를 넘겨 보는 중이면 몇 번째인지
+  cats: [],         // seat → 고양이 (내 자리는 null)
+  emotes: {},       // seat → 지금 띄운 말풍선
   pending: null,   // 일시정지 중 밀린 진행
   undoStack: [],
   timer: null,
@@ -94,6 +97,8 @@ async function newGame(mode, playerCount = 2, rounds = 4) {
   state.undoStack = [];
   state.game = createGame({ playerCount, seed: (Date.now() % 1e9) | 0 });
   state.bots = Array.from({ length: playerCount }, () => makeBot());
+  state.cats = seatCats(playerCount, state.human);
+  state.emotes = {};
   startHand(state.game);
   hideSheet();
   await prepare();
@@ -108,6 +113,7 @@ async function ceremony() {
   state.undoStack = [];
   if (!state.use3D) {
     announceDeal();
+    greetCats();
     return step();
   }
   const stage = {
@@ -125,6 +131,7 @@ async function ceremony() {
     },
   });
   announceDeal();
+  greetCats();
   step();
 }
 
@@ -258,6 +265,8 @@ function resolveWith(humanClaim) {
   const last = g.log[g.log.length - 1];
   if (last?.type === "call" && last.call !== "win") {
     table()?.meldTiles(last.seat, last.tiles, last.from, state.human);
+    emote(last.seat, last.call === "chow" ? "chow" : "call");
+    if (last.seat === state.human) emote(last.from, "robbed", { delay: 350 });
     const label = { pong: "펑", chow: "치", kong: "깡" }[last.call];
     say(
       withMnemonic(`${seatLabel(g, last.seat)}가 <b>${label}</b>했습니다.`, "locked"),
@@ -273,7 +282,12 @@ function botTurn() {
   const bot = state.bots[seat];
   const p = g.players[seat];
 
-  if (g.phase === PHASE.DRAW) { table()?.drawTile(seat, state.human); draw(g); return step(); }
+  if (g.phase === PHASE.DRAW) {
+    if (Math.random() < 0.15) emote(seat, "draw");
+    table()?.drawTile(seat, state.human);
+    draw(g);
+    return step();
+  }
   if (g.phase !== PHASE.DISCARD) return step();
 
   if (bot.wantsWin(p)) { declareWin(g, seat); return step(); }
@@ -282,6 +296,35 @@ function botTurn() {
   table()?.discardTile(seat, tile, state.human);
   discard(g, tile);
   step();
+}
+
+/* ── 고양이 감정 표현 ───────────────────────────────── */
+
+function emote(seat, kind, { delay = 0 } = {}) {
+  const cat = state.cats[seat];
+  const spec = emoteFor(kind);
+  if (!cat || !spec) return;
+  setTimeout(() => {
+    state.emotes[seat] = { emoji: spec.emoji, text: spec.text };
+    if (spec.meow) state.sound?.sfx?.meow?.(cat.pitch, cat.meowLen);
+    render(state);
+    setTimeout(() => {
+      if (state.emotes[seat]?.emoji === spec.emoji) {
+        delete state.emotes[seat];
+        render(state);
+      }
+    }, 2400);
+  }, delay);
+}
+
+/** 판이 시작되면 다 같이 인사한다 */
+function greetCats() {
+  let delay = 250;
+  state.cats.forEach((cat, seat) => {
+    if (!cat) return;
+    emote(seat, "greet", { delay });
+    delay += 650;
+  });
 }
 
 /* ── 학습 모드 도구 ─────────────────────────────────── */
@@ -415,6 +458,12 @@ function finishHand() {
   const g = state.game;
   const r = g.result;
   const t = table();
+  if (r?.winner !== null && r?.winner !== undefined) {
+    emote(r.winner, "win");
+    for (const pay of r.payments) emote(pay.from, "lose", { delay: 500 });
+  } else if (r?.exhausted) {
+    state.cats.forEach((cat, seat) => cat && emote(seat, "exhausted"));
+  }
   if (t && r?.winner !== null && r?.winner !== undefined) {
     t.revealWin(
       [...g.players[r.winner].melds.map((m) => m.tiles), ...r.decomposition.sets.map((x) => x.tiles)],

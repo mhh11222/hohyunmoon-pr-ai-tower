@@ -152,6 +152,48 @@ export function createAudio() {
     body.stop(t + 0.12);
   }
 
+  /**
+   * 고양이 울음 — "야~옹". 올라갔다 내려오는 기본음 + 포먼트 필터.
+   * pitch가 높으면 작은 고양이(포도), 낮으면 크고 뚱뚱한 고양이(막내).
+   */
+  function meow(pitch = 1, len = 0.65) {
+    if (!ensure() || !sfxOn) return;
+    const t = ctx.currentTime;
+    const f0 = 560 * pitch;
+
+    const osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(f0 * 0.6, t);
+    osc.frequency.linearRampToValueAtTime(f0 * 1.15, t + len * 0.32);   // "야~"
+    osc.frequency.setValueAtTime(f0 * 1.15, t + len * 0.45);
+    osc.frequency.exponentialRampToValueAtTime(f0 * 0.5, t + len);      // "~옹"
+
+    const vibrato = ctx.createOscillator();
+    vibrato.frequency.value = 6.5;
+    const vibratoGain = ctx.createGain();
+    vibratoGain.gain.value = f0 * 0.03;
+    vibrato.connect(vibratoGain).connect(osc.frequency);
+
+    // 입 모양 — 포먼트가 열렸다 닫힌다
+    const formant = ctx.createBiquadFilter();
+    formant.type = "bandpass";
+    formant.Q.value = 1.6;
+    formant.frequency.setValueAtTime(900 * pitch, t);
+    formant.frequency.linearRampToValueAtTime(1500 * pitch, t + len * 0.35);
+    formant.frequency.exponentialRampToValueAtTime(600 * pitch, t + len);
+
+    const g = ctx.createGain();
+    const vol = 0.34 / Math.sqrt(pitch); // 큰 고양이가 더 우렁차다
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.06);
+    g.gain.setValueAtTime(vol, t + len * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+
+    osc.connect(formant).connect(g).connect(sfxBus);
+    osc.start(t); vibrato.start(t);
+    osc.stop(t + len + 0.05); vibrato.stop(t + len + 0.05);
+  }
+
   /** 산가지 — 가는 대나무가 부딪히는 소리 */
   function stick(when = 0) {
     clack(when, { gain: 0.5, pitch: 2.1 });
@@ -367,6 +409,6 @@ export function createAudio() {
     toggleMusic() { return musicOn ? (stopMusic(), false) : startMusic(); },
     startMusic,
     stopMusic,
-    sfx: { clack, stick, dice, shuffle, fanfare },
+    sfx: { clack, stick, dice, shuffle, fanfare, meow },
   };
 }

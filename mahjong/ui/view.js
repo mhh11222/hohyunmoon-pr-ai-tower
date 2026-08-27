@@ -24,6 +24,17 @@ function sticksHTML(purse) {
   return `<span class="sticks">${parts.join("")}<b>${purseValue(purse)}점</b></span>`;
 }
 
+/** 고양이 아바타 + 감정 말풍선 */
+function catHTML(state, seat) {
+  const cat = state.cats?.[seat];
+  if (!cat) return "";
+  const emote = state.emotes?.[seat];
+  const bubble = emote
+    ? `<span class="bubble">${emote.emoji}${emote.text ? ` ${emote.text}` : ""}</span>`
+    : "";
+  return `<span class="avatar-wrap">${bubble}<img class="avatar" src="${cat.avatar}" alt="${cat.name}"></span>`;
+}
+
 function meldsHTML(player, { small = true } = {}) {
   const melds = player.melds
     .map((m) => `<span class="meld">${tilesHTML(m.tiles, { extraClass: small ? "small" : "" })}</span>`)
@@ -53,7 +64,8 @@ export function render(state) {
     .map((p) => state.use3D
       ? `<section class="seat slim ${game.turn === p.seat && game.phase !== PHASE.CALLS ? "active" : ""}">
           <div class="seat-head">
-            <span class="seat-name"><b>${seatLabel(game, p.seat)}</b> 봇 · 손패 ${p.concealed.length}장${
+            ${catHTML(state, p.seat)}
+            <span class="seat-name"><b>${state.cats?.[p.seat]?.name ?? "봇"}</b> <span class="dim">${seatLabel(game, p.seat)}</span> · 손패 ${p.concealed.length}장${
               p.melds.length ? ` · 공개 ${p.melds.length}묶음` : ""
             }${p.flowers.length ? ` · 꽃 ${p.flowers.length}` : ""}</span>
             ${sticksHTML(game.bank.players[p.seat])}
@@ -62,7 +74,8 @@ export function render(state) {
       : `
       <section class="seat ${game.turn === p.seat && game.phase !== PHASE.CALLS ? "active" : ""}">
         <div class="seat-head">
-          <span class="seat-name"><b>${seatLabel(game, p.seat)}</b> 봇</span>
+          ${catHTML(state, p.seat)}
+          <span class="seat-name"><b>${state.cats?.[p.seat]?.name ?? "봇"}</b> <span class="dim">${seatLabel(game, p.seat)}</span></span>
           ${sticksHTML(game.bank.players[p.seat])}
         </div>
         <div class="hand">${tilesHTML(p.concealed.map(() => "back"), { back: true, extraClass: "small" })}</div>
