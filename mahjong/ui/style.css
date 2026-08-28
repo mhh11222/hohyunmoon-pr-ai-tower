@@ -43,7 +43,10 @@ header h1 { font-size: 15px; margin: 0; letter-spacing: .02em; opacity: .9; }
   margin: 0; padding: 7px 10px; min-height: 34px;
   background: rgba(0,0,0,.28); border-left: 3px solid var(--gold);
   border-radius: 6px; font-size: 13px; line-height: 1.35;
+  display: flex; align-items: center; gap: 9px;
 }
+#subtitle .subtext { flex: 1; }
+#subtitle .subtile .tile { --tw: 34px; width: 34px; height: 47px; flex: 0 0 auto; }
 #subtitle b { color: var(--gold); font-weight: 600; }
 
 #toolbar { display: flex; gap: 6px; justify-content: flex-end; }
