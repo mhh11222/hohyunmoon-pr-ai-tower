@@ -324,6 +324,51 @@ export async function createTable(canvas, { sound = null } = {}) {
   }
 
   let hands3d = []; // side마다 하나 — newHand에서 만든다
+  let windMarkers = []; // 바닥에 그린 황금 東南西北
+
+  /** 한자 하나를 투명 배경에 황금색으로 */
+  function windCanvas(glyph) {
+    const c = document.createElement("canvas");
+    c.width = c.height = 256;
+    const ctx = c.getContext("2d");
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = '700 190px "Noto Sans KR", "Noto Sans CJK KR", serif';
+    ctx.shadowColor = "rgba(0,0,0,.45)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 4;
+    const gold = ctx.createLinearGradient(0, 40, 0, 220);
+    gold.addColorStop(0, "#e8c76a");
+    gold.addColorStop(0.5, "#c9a23e");
+    gold.addColorStop(1, "#a37f2a");
+    ctx.fillStyle = gold;
+    ctx.fillText(glyph, 128, 138);
+    return c;
+  }
+
+  /**
+   * 각 자리 앞 바닥에 자기 방위를 깐다. 딜러가 東이고 반시계로 南→西→北.
+   * 딜러가 넘어가면 글자도 따라 돈다.
+   */
+  function layWindMarkers(game) {
+    for (const m of windMarkers) scene.remove(m);
+    windMarkers = [];
+    const WINDS = ["東", "南", "西", "北"];
+    for (let seat = 0; seat < sideCount; seat++) {
+      const wind = WINDS[(seat - game.dealerIndex + sideCount) % sideCount];
+      const tex = new THREE.CanvasTexture(windCanvas(wind));
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.19, 0.19),
+        new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.92, depthWrite: false })
+      );
+      const side = seatSide(seat);
+      mesh.position.copy(orient(0, 0.004, 0.955, side));
+      mesh.rotation.set(-Math.PI / 2, 0, sideAngle(side)); // 그 자리에서 읽히는 방향
+      windMarkers.push(mesh);
+      scene.add(mesh);
+    }
+  }
   let cats3d = [];  // 자리에 앉은 고양이들 — 각자 다른 잔모션으로 움직인다
 
   /**
@@ -634,6 +679,7 @@ export async function createTable(canvas, { sound = null } = {}) {
     for (const hand of hands3d) scene.remove(hand);
     hands3d = Array.from({ length: sideCount }, (_, s) => buildHand(s !== 0));
     seatCats3d(cats);
+    layWindMarkers(game);
 
     // 0) 첫 판이면 딜러 뽑기 — 내가 주사위를 굴리고 합만큼 세어 딜러가 정해진다
     if (game.handNumber === 1 && game.dealerRoll) {
@@ -1039,6 +1085,7 @@ export async function createTable(canvas, { sound = null } = {}) {
     seatSide = (seat) => (seat - humanSeat + sideCount) % sideCount;
     setCam(playView(sideCount));
     seatCats3d(cats);
+    layWindMarkers(game);
     rivers = Array.from({ length: sideCount }, () => []);
     melds = Array.from({ length: sideCount }, () => []);
     hands = Array.from({ length: sideCount }, () => []);
