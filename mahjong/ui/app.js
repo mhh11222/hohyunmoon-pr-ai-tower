@@ -248,12 +248,14 @@ function gateHTML(name, payload, g, who) {
       <p class="hint">다음 — 패 ${g.playerCount === 4 ? 140 : g.playerCount === 3 ? 104 : 100}장을 전부 엎어 섞습니다.</p>`;
   }
   if (name === "wall") {
+    const total = payload.counts.reduce((sum, n) => sum + n * 2, 0);
     const walls = payload.counts
-      .map((n, i) => `${who(i)} 앞에 벽돌 ${n}개`)
-      .join(" · ");
+      .map((n, i) => `${who(i)} 앞에 벽돌 ${n}개 = <b>${n * 2}장</b>`)
+      .join("<br>");
     return `<h2>🧱 산(벽)을 다 쌓았습니다</h2>
-      <p>섞은 패를 <b>2단으로</b> 쌓아 각자 앞에 담을 만들었습니다.
-      ${g.playerCount}인이라 벽 ${g.playerCount}개 — ${walls} (벽돌 1개 = 위아래 2장).</p>
+      <p>섞은 패를 <b>2단(위아래 두 층)</b>으로 쌓아 각자 앞에 담을 만들었습니다.
+      <b>벽돌 1개 = 위 1장 + 아래 1장 = 2장</b>이라는 걸 기억하세요.</p>
+      <p class="chain">${walls}<br>합계 <b>${total}장</b> — 이 판에 쓰는 패 전부입니다.</p>
       <p>이 담들은 이어진 <b>하나의 산</b>입니다. 어디서부터 뜯을지는 딜러의 주사위가 정합니다.</p>
       <p class="hint">다음 — 딜러 ${dealer}가 주사위 2개를 굴려 <b>산의 입구</b>를 정합니다.</p>`;
   }
