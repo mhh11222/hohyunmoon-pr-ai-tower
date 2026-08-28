@@ -110,7 +110,10 @@ export function render(state) {
     "active",
     game.turn === human && game.phase !== PHASE.CALLS
   );
-  document.getElementById("subtitle").innerHTML = state.subtitle || "";
+  const chip = state.subtitleTile
+    ? `<span class="subtile">${tileHTML(state.subtitleTile)}</span>`
+    : "";
+  document.getElementById("subtitle").innerHTML = `${chip}<span class="subtext">${state.subtitle || ""}</span>`;
   renderToolbar(state);
   renderCoach(state);
   renderActions(state);

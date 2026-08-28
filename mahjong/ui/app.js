@@ -63,6 +63,7 @@ const state = {
   timer: null,
   drag: null,          // 길게 눌러 옮기는 중인 패 { index }
   handReveal: null,    // 배패 중이면 지금까지 받은 장수 (null = 전부 보임)
+  subtitleTile: null,  // 자막 옆에 크게 보여줄 패 (방금 버려진 패)
   suppressClick: false,
   table: null,      // 3D 테이블 (없으면 2D로 돈다)
   use3D: false,
@@ -286,6 +287,7 @@ function gateHTML(name, payload, g, who) {
 function announceDeal() {
   const g = state.game;
   state.picked = null;
+  state.subtitleTile = null;
   state.note = null;
   state.undoStack = [];
   const dice = g.log.find((e) => e.type === "dice");
@@ -321,6 +323,7 @@ function humanTurn() {
   const me = g.players[state.human];
 
   if (g.phase === PHASE.DRAW) {
+    state.subtitleTile = null;
     say(
       withMnemonic("<b>내 차례</b> — 먼저 한 장 뽑습니다.", "rhythm"),
       "내 차례 — 뽑기"
@@ -373,9 +376,12 @@ function handleCalls() {
   const mine = g.pending.calls.filter((c) => c.seat === state.human);
   const who = seatLabel(g, g.pending.from);
 
+  state.subtitleTile = g.pending.tile;
+
   if (!mine.length) {
     say(
-      withMnemonic(`${who}가 <b>${tileName(g.pending.tile)}</b>를 버렸습니다.`, "river"),
+      `${who}가 <b>${tileName(g.pending.tile)}</b>를 버렸습니다 — 이 패로는 내 손에서 ` +
+        `펑(같은 패 2장 필요)·치(계단 조각 필요)가 안 되어 그냥 지나갑니다.`,
       `${who} → ${tileName(g.pending.tile)}`
     );
     render(state);
@@ -383,8 +389,10 @@ function handleCalls() {
   }
 
   say(
-    withMnemonic(`${who}가 버린 <b>${tileName(g.pending.tile)}</b> — 부를 수 있습니다.`, "call"),
-    `${who} → ${tileName(g.pending.tile)} · 부를 수 있습니다`
+    `${who}가 버린 <b>${tileName(g.pending.tile)}</b> — <b>가져올 수 있습니다!</b> ` +
+      `아래 버튼으로 펑·치·완성을 외치고, 원치 않으면 패스. ` +
+      `<i>급하면 부르고, 크게 먹으려면 참는다</i>`,
+    `${who} → ${tileName(g.pending.tile)} · 가져올 수 있습니다`
   );
   state.buttons = [
     ...mine.map((c) => ({
@@ -441,6 +449,7 @@ function botTurn() {
 
   if (bot.wantsWin(p)) { declareWin(g, seat); return step(); }
   const tile = bot.discard(p, botContext(g, seat));
+  state.subtitleTile = tile;
   say(`${seatLabel(g, seat)}가 <b>${tileName(tile)}</b>를 버렸습니다.`, `${seatLabel(g, seat)} → ${tileName(tile)}`);
   table()?.discardTile(seat, tile, state.human);
   discard(g, tile);
