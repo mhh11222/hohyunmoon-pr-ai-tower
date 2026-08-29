@@ -1023,6 +1023,44 @@ export async function createTable(canvas, { sound = null } = {}) {
     }
   }
 
+  /** 안깡 — 손에서 4장을 묶음 자리에 눕히고, 담 뒤에서 1장 보충해 온다 */
+  function concealedKong(seat, tile) {
+    const side = seatSide(seat);
+    const meldIndex = Math.floor(melds[side].length / 3);
+    for (let i = 0; i < 4; i++) {
+      const mesh = makeTile(tile);
+      mesh.position.copy(orient((i - 1.5) * 0.05, 0.02, BASE.hand * 0.9, side));
+      faceSide(mesh, side);
+      melds[side].push(mesh);
+      move(mesh, meldSpot(side, meldIndex, i), {
+        duration: 0.34,
+        delay: i * 0.06,
+        height: 0.14,
+        onDone: () => sound?.sfx?.clack?.(0, { gain: 0.7 }),
+      });
+    }
+    if (side !== 0) {
+      for (let i = 0; i < 4 && hands[side].length; i++) recycle(hands[side].pop());
+      reflowHand(side);
+    }
+    // 보충은 담의 뒤쪽에서
+    const replacement = wallTiles.pop();
+    if (replacement) {
+      const to = side === 0
+        ? orient(0, 0.02, 1.45, 0)
+        : handSpot(side, hands[side].length, hands[side].length + 1);
+      if (side !== 0) {
+        hands[side].push(replacement);
+        faceSide(replacement, side, -Math.PI / 2.2);
+        reflowHand(side);
+      }
+      handCarry(side, replacement, to, {
+        duration: 0.55,
+        onDone: () => { if (side === 0) recycle(replacement); },
+      });
+    }
+  }
+
   /** 완성 — 이긴 손패를 가운데 두 줄로 펼친다 */
   function revealWin(sets, pair) {
     const groups = [...sets, pair];
@@ -1198,6 +1236,7 @@ export async function createTable(canvas, { sound = null } = {}) {
     drawTile,
     discardTile,
     meldTiles,
+    concealedKong,
     revealWin,
     payment,
     sync,

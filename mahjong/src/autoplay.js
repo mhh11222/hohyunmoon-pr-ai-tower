@@ -1,8 +1,8 @@
 // 봇끼리 한 판을 끝까지 돌린다 — 콘솔 검증·테스트용 드라이버.
 
-import { PHASE, draw, discard, resolveDiscard, declareWin, actionsFor } from "./game.js";
+import { PHASE, draw, discard, resolveDiscard, declareWin, declareConcealedKong, actionsFor } from "./game.js";
 import { makeBot, botContext } from "./bot.js";
-import { CALL } from "./calls.js";
+import { CALL, concealedKongs } from "./calls.js";
 
 export function playHand(game, { bots = null, maxSteps = 2000 } = {}) {
   const agents = bots || game.players.map(() => makeBot());
@@ -21,6 +21,13 @@ export function playHand(game, { bots = null, maxSteps = 2000 } = {}) {
       if (agents[seat].wantsWin(p)) {
         declareWin(game, seat);
         continue;
+      }
+      if (game.options.allowKong) {
+        const [kongTile] = concealedKongs(p.concealed);
+        if (kongTile) {
+          declareConcealedKong(game, seat, kongTile);
+          if (game.phase !== PHASE.DISCARD) continue; // 보충하다 산이 떨어짐(유국)
+        }
       }
       discard(game, agents[seat].discard(p, botContext(game, seat)));
       continue;

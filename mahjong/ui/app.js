@@ -6,9 +6,10 @@
 
 import {
   createGame, startHand, nextHand, draw, discard, resolveDiscard, declareWin,
-  snapshotGame, restoreGame, seenCounts, windOf, PHASE,
+  declareConcealedKong, snapshotGame, restoreGame, seenCounts, windOf, PHASE,
 } from "../src/game.js";
 import { makeBot, botContext, LEVEL, LEVEL_INFO } from "../src/bot.js";
+import { concealedKongs } from "../src/calls.js";
 import { isWinningHand } from "../src/hand.js";
 import { tileName, SEATS, sortTiles } from "../src/tiles.js";
 import { coachHand, tileNote, mnemonic, MNEMONICS } from "./coach.js";
@@ -345,6 +346,24 @@ function humanTurn() {
     return render(state);
   }
 
+  if (state.game.options.allowKong) {
+    for (const kongTile of concealedKongs(me.concealed)) {
+      state.buttons.push({
+        label: `깡! (${tileName(kongTile)} 4장)`,
+        style: "hot",
+        onClick: () => {
+          remember();
+          shoutCall("kong", state.human);
+          table()?.concealedKong(state.human, kongTile);
+          declareConcealedKong(g, state.human, kongTile);
+          state.flash = `<b>안깡!</b> ${tileName(kongTile)} 4장을 공개하고(묶음 1개 취급) 담 뒤에서 1장 보충했습니다. 이어서 1장 버립니다.`;
+          emote(state.human, "call");
+          step();
+        },
+      });
+    }
+  }
+
   if (isWinningHand(me.concealed, me.melds.length)) {
     say(
       withMnemonic("<b>완성!</b> 묶음 5개 + 짝 1개가 다 됐습니다. 더 크게 먹으려면 패를 눌러 계속 갈 수도 있습니다.", "bonus"),
@@ -448,6 +467,20 @@ function botTurn() {
   if (g.phase !== PHASE.DISCARD) return step();
 
   if (bot.wantsWin(p)) { declareWin(g, seat); return step(); }
+  if (g.options.allowKong) {
+    const [kongTile] = concealedKongs(p.concealed);
+    if (kongTile) {
+      shoutCall("kong", seat);
+      table()?.concealedKong(seat, kongTile);
+      declareConcealedKong(g, seat, kongTile);
+      say(
+        `${seatLabel(g, seat)}가 <b>안깡</b> — ${tileName(kongTile)} 4장을 공개하고 담 뒤에서 1장 보충했습니다.`,
+        `${seatLabel(g, seat)} 안깡 (${tileName(kongTile)})`
+      );
+      emote(seat, "call");
+      return step();
+    }
+  }
   const tile = bot.discard(p, botContext(g, seat));
   state.subtitleTile = tile;
   say(`${seatLabel(g, seat)}가 <b>${tileName(tile)}</b>를 버렸습니다.`, `${seatLabel(g, seat)} → ${tileName(tile)}`);
@@ -869,7 +902,7 @@ function onPointerUp() {
   }
 }
 
-export const VERSION = "v12";
+export const VERSION = "v13";
 
 export function boot() {
   const ver = document.getElementById("ver");

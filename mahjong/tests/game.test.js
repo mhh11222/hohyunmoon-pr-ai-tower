@@ -395,3 +395,69 @@ describe("자리 방위는 딜러 기준으로 돈다", () => {
     expect(game2.result.bonuses.some((b) => b.key === "seatFlower")).toBe(false);
   });
 });
+
+describe("안깡 — 내 손의 4장", () => {
+  function kongReady() {
+    const game = startHand(createGame({ playerCount: 2, seed: 4, dealerIndex: 0, options: { allowKong: true } }));
+    const me = game.players[0];
+    me.concealed = ["s3","s3","s3","s3","p1","p2","p3","p4","p5","p6","z1","z1","z1","z5","z5","m1","m2"]
+      .filter((t) => !t.startsWith("m")); // 2인엔 만자가 없다
+    me.concealed.push("p7","p8"); // 17장 채우기
+    game.turn = 0;
+    game.phase = PHASE.DISCARD;
+    return game;
+  }
+
+  it("4장을 공개하고 담 뒤에서 1장 보충한다", async () => {
+    const { declareConcealedKong } = await import("../src/game.js");
+    const game = kongReady();
+    const tailBefore = game.pile[game.pile.length - 1];
+    const pileBefore = game.pile.length;
+    declareConcealedKong(game, 0, "s3");
+    const me = game.players[0];
+    expect(me.concealed.filter((t) => t === "s3")).toHaveLength(0);
+    expect(me.melds[0]).toMatchObject({ type: "concealed-kong", locked: true });
+    expect(me.melds[0].tiles).toEqual(["s3","s3","s3","s3"]);
+    expect(game.pile).toHaveLength(pileBefore - 1);
+    if (!tailBefore.startsWith("f")) expect(me.concealed).toContain(tailBefore); // 뒤에서 보충
+    expect(game.phase).toBe(PHASE.DISCARD); // 이어서 버릴 차례
+  });
+
+  it("안깡 뒤에도 완성형 계산이 맞는다 (깡 = 묶음 1개)", async () => {
+    const { declareConcealedKong } = await import("../src/game.js");
+    const game = kongReady();
+    declareConcealedKong(game, 0, "s3");
+    const me = game.players[0];
+    // 남은 손을 묶음 4 + 짝으로 강제 완성
+    me.concealed = ["p1","p2","p3","p4","p5","p6","p7","p8","p9","z1","z1","z1","z5","z5"];
+    declareWin(game, 0);
+    expect(game.result.winner).toBe(0);
+    expect(game.result.melds[0].type).toBe("concealed-kong");
+  });
+
+  it("안깡은 '안 부르고' 보너스를 깨지 않는다", async () => {
+    const { declareConcealedKong } = await import("../src/game.js");
+    const game = kongReady();
+    declareConcealedKong(game, 0, "s3");
+    game.players[0].concealed = ["p1","p2","p3","p4","p5","p6","p7","p8","p9","z1","z1","z1","z5","z5"];
+    game.players[0].flowers = [];
+    declareWin(game, 0);
+    expect(game.result.bonuses.some((b) => b.key === "concealedSelfDraw")).toBe(true);
+  });
+
+  it("4장이 없거나 옵션이 꺼져 있으면 거부", async () => {
+    const { declareConcealedKong } = await import("../src/game.js");
+    const game = kongReady();
+    expect(() => declareConcealedKong(game, 0, "p1")).toThrow();
+    const off = startHand(createGame({ playerCount: 2, seed: 4, dealerIndex: 0 }));
+    off.turn = 0; off.phase = PHASE.DISCARD;
+    off.players[0].concealed = ["s3","s3","s3","s3", ...off.players[0].concealed.slice(4)];
+    expect(() => declareConcealedKong(off, 0, "s3")).toThrow();
+  });
+
+  it("actionsFor가 안깡 후보를 노출한다", () => {
+    const game = kongReady();
+    const acts = actionsFor(game, 0);
+    expect(acts.some((a) => a.type === "ankan" && a.tile === "s3")).toBe(true);
+  });
+});
