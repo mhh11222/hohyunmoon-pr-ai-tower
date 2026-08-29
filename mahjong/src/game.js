@@ -8,7 +8,7 @@ import { makeRng, rollDice } from "./rng.js";
 import { shuffleDeck, excludedSuits } from "./deck.js";
 import { openWall, dealHands, resolveFlowers, WALL_COUNT } from "./wall.js";
 import { decompose, isWinningHand, waitingTiles } from "./hand.js";
-import { availableCalls, resolveCalls, rightOf, CALL } from "./calls.js";
+import { availableCalls, resolveCalls, rightOf, concealedKongs, CALL } from "./calls.js";
 import { DEFAULT_OPTIONS, scoreWin } from "./score.js";
 import { createBank, transfer, settleUp } from "./sticks.js";
 
@@ -105,6 +105,9 @@ export function actionsFor(game, seat) {
   if (game.phase === PHASE.DISCARD && game.turn === seat) {
     const p = player(game, seat);
     const acts = [{ type: "discard", tiles: discardable(game, seat) }];
+    if (game.options.allowKong) {
+      for (const tile of concealedKongs(p.concealed)) acts.unshift({ type: "ankan", tile });
+    }
     if (isWinningHand(p.concealed, p.melds.length)) acts.unshift({ type: CALL.WIN, selfDraw: true });
     return acts;
   }
@@ -216,6 +219,40 @@ export function resolveDiscard(game, claims = []) {
   }
   game.phase = PHASE.DISCARD; // 가져왔으면 뽑기 없이 바로 버린다
   return game;
+}
+
+/**
+ * 안깡 — 내 손에 같은 패 4장이 다 모였을 때 내 차례(버릴 차례)에 선언한다.
+ * 4장을 공개하고(묶음 1개 취급) 담 뒤쪽에서 1장 보충. 보충이 꽃이면 또 보충.
+ * 남의 패를 부른 게 아니라서 "안 부르고 이김" 보너스는 깨지지 않는다.
+ */
+export function declareConcealedKong(game, seat, tile) {
+  if (game.phase !== PHASE.DISCARD || game.turn !== seat) {
+    throw new Error("안깡은 내 차례(버릴 차례)에만 선언한다");
+  }
+  if (!game.options.allowKong) throw new Error("깡 옵션이 꺼져 있다");
+  const p = player(game, seat);
+  if (p.concealed.filter((t) => t === tile).length !== 4) {
+    throw new Error(`손에 ${tile} 4장이 없다`);
+  }
+  for (let i = 0; i < 4; i++) p.concealed.splice(p.concealed.indexOf(tile), 1);
+  p.melds.push({ type: "concealed-kong", tiles: [tile, tile, tile, tile], from: seat, locked: true });
+  emit(game, "call", { seat, call: "ankan", tiles: [tile, tile, tile, tile] });
+
+  // 담 뒤쪽에서 보충 — 꽃이면 눕히고 반복
+  for (;;) {
+    const replacement = game.pile.pop();
+    if (replacement === undefined) return exhaust(game);
+    if (isFlower(replacement)) {
+      p.flowers.push(replacement);
+      emit(game, "flower", { seat, flower: replacement });
+      continue;
+    }
+    p.concealed = p.autoSort === false ? [...p.concealed, replacement] : sortTiles([...p.concealed, replacement]);
+    emit(game, "kongReplacement", { seat, tile: replacement });
+    break;
+  }
+  return game; // 그대로 버릴 차례 — 이어서 1장 버린다
 }
 
 /** 완성 선언 — 직접 뽑아 이기거나, 버려진 패로 이기거나 */
