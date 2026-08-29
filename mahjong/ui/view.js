@@ -190,7 +190,14 @@ export function resultSheet(game, human, guide = false) {
     <div class="row"><span>기본점</span><b>${basePoint}</b></div>
     ${r.bonuses.map((b) => `<div class="row"><span>${b.name} (보너스 ${b.value})</span><b>+${b.value * bonusPoint}</b></div>`).join("")}
     <div class="row"><span><b>받는 점수</b> — 보너스 ${r.bonusTotal}개</span><b>${r.value}점</b></div>
-    ${r.payments.map((p) => `<div class="row"><span>${seatLabel(game, p.from)} → ${seatLabel(game, p.to)}</span><b>${p.amount}점</b></div>`).join("")}
+    ${r.isSelfDraw
+      ? `<div class="row"><span class="dim">직접 뽑기 지불 — ${
+          game.playerCount === 2 ? "2인 특칙: 상대가 2배로 냅니다" : "나머지 전원이 각각 전액을 냅니다"
+        }</span></div>`
+      : ""}
+    ${r.payments.map((p) => `<div class="row"><span>${seatLabel(game, p.from)} → ${seatLabel(game, p.to)}${
+      r.isSelfDraw && game.playerCount === 2 ? ` <span class="dim">(${r.value} × 2)</span>` : ""
+    }</span><b>${p.amount}점</b></div>`).join("")}
     ${totalsHTML(game, human)}
     ${guide ? `<p class="hint">${mnemonic(r.isSelfDraw ? "bonus" : "ron").line}</p>` : ""}`;
 }
