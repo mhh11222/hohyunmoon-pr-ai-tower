@@ -37,6 +37,7 @@ body {
 
 header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 header h1 { font-size: 15px; margin: 0; letter-spacing: .02em; opacity: .9; }
+header .ver { font-size: 10px; opacity: .5; font-weight: 400; }
 #hud { font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; }
 
 #subtitle {
@@ -130,7 +131,11 @@ button.card span { display: block; font-size: 12px; font-weight: 500; line-heigh
 .stick.s100::after { background: var(--red); }
 
 .hand { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; }
-.hand.mine .tile { cursor: pointer; touch-action: none; }
+.hand.mine { touch-action: none; }
+.hand.mine .tile {
+  cursor: pointer; touch-action: none;
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+}
 .hand.mine .tile.dragging {
   transform: translateY(-12px) scale(1.1);
   box-shadow: 0 8px 16px rgba(0,0,0,.5);

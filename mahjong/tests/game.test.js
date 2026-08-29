@@ -350,3 +350,48 @@ describe("손패 직접 배열", () => {
     expect(hand).toHaveLength(17);
   });
 });
+
+describe("자리 방위는 딜러 기준으로 돈다", () => {
+  it("딜러가 東, 반시계로 南西北", async () => {
+    const { windOf } = await import("../src/game.js");
+    const game = createGame({ playerCount: 4, seed: 1, dealerIndex: 2 });
+    expect(windOf(game, 2)).toBe("east");
+    expect(windOf(game, 3)).toBe("south");
+    expect(windOf(game, 0)).toBe("west");
+    expect(windOf(game, 1)).toBe("north");
+  });
+
+  it("2인은 東·南, 3인은 東·南·西", async () => {
+    const { windOf } = await import("../src/game.js");
+    const two = createGame({ playerCount: 2, seed: 1, dealerIndex: 1 });
+    expect(windOf(two, 1)).toBe("east");
+    expect(windOf(two, 0)).toBe("south");
+    const three = createGame({ playerCount: 3, seed: 1, dealerIndex: 0 });
+    expect([0, 1, 2].map((s) => windOf(three, s))).toEqual(["east", "south", "west"]);
+  });
+
+  it("내 꽃 보너스도 현재 방위를 따른다 — 딜러가 아니면 春이 내 꽃이 아니다", () => {
+    // 딜러=1(2인)이면 내(0) 방위는 南 → 내 꽃은 夏(f2)
+    const game = startHand(createGame({ playerCount: 2, seed: 9, dealerIndex: 1 }));
+    game.players[0].concealed = [
+      "p1","p2","p3","p4","p5","p6","s1","s1","s1","s4","s5","s6","z1","z1","z1","z5","z5",
+    ];
+    game.players[0].melds = [];
+    game.players[0].flowers = ["f2"]; // 夏 — 南 자리 꽃
+    game.turn = 0;
+    game.phase = PHASE.DISCARD;
+    declareWin(game, 0);
+    expect(game.result.bonuses.some((b) => b.key === "seatFlower")).toBe(true);
+
+    const game2 = startHand(createGame({ playerCount: 2, seed: 9, dealerIndex: 1 }));
+    game2.players[0].concealed = game.players[0].concealed === undefined ? [] : [
+      "p1","p2","p3","p4","p5","p6","s1","s1","s1","s4","s5","s6","z1","z1","z1","z5","z5",
+    ];
+    game2.players[0].melds = [];
+    game2.players[0].flowers = ["f1"]; // 春 — 지금 내 자리(南) 꽃이 아니다
+    game2.turn = 0;
+    game2.phase = PHASE.DISCARD;
+    declareWin(game2, 0);
+    expect(game2.result.bonuses.some((b) => b.key === "seatFlower")).toBe(false);
+  });
+});
