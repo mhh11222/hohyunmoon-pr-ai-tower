@@ -226,7 +226,7 @@ export function declareWin(game, seat, byDiscard = null) {
   if (!decomposition) throw new Error("완성형이 아니다");
 
   const score = scoreWin({
-    seat: p.seatName,
+    seat: windOf(game, seat),
     melds: p.melds,
     decomposition,
     flowers: p.flowers,
@@ -288,6 +288,14 @@ export function snapshotGame(game) {
 export function restoreGame(game, snap) {
   for (const key of Object.keys(snap)) game[key] = structuredClone(snap[key]);
   return game;
+}
+
+/**
+ * 그 자리의 현재 방위 — 딜러가 東이고 반시계로 南西北.
+ * 자리 꽃(동=春…)과 門風도 이 방위를 따른다. 딜러가 넘어가면 방위도 돈다.
+ */
+export function windOf(game, seat) {
+  return SEATS[(seat - game.dealerIndex + game.playerCount) % game.playerCount];
 }
 
 /** 학습 모드용 — 지금까지 보이는 패로 대기패 계산 */

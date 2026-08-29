@@ -2,7 +2,7 @@
 
 import { tileHTML, tilesHTML } from "./tileface.js";
 import { SEATS, tileName } from "../src/tiles.js";
-import { PHASE } from "../src/game.js";
+import { PHASE, windOf } from "../src/game.js";
 import { mnemonic } from "./coach.js";
 import { purseValue, exchange } from "../src/sticks.js";
 
@@ -10,7 +10,7 @@ const CALL_LABEL = { pong: "펑", chow: "치", kong: "깡", win: "완성!" };
 const SEAT_KO = { east: "동", south: "남", west: "서", north: "북" };
 
 export function seatLabel(game, seat) {
-  const name = SEAT_KO[SEATS[seat]];
+  const name = SEAT_KO[windOf(game, seat)]; // 딜러가 東 — 매판 돈다
   const dealer = seat === game.dealerIndex ? " · 딜러" : "";
   return `${name}${dealer}`;
 }

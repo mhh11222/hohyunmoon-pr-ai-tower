@@ -6,7 +6,7 @@
 
 import {
   createGame, startHand, nextHand, draw, discard, resolveDiscard, declareWin,
-  snapshotGame, restoreGame, seenCounts, PHASE,
+  snapshotGame, restoreGame, seenCounts, windOf, PHASE,
 } from "../src/game.js";
 import { makeBot, botContext, LEVEL, LEVEL_INFO } from "../src/bot.js";
 import { isWinningHand } from "../src/hand.js";
@@ -333,7 +333,7 @@ function humanTurn() {
   }
 
   if (state.picked) {
-    state.note = state.mode.coach ? tileNote(state.picked.id, me.seatName) : null;
+    state.note = state.mode.coach ? tileNote(state.picked.id, windOf(g, state.human)) : null;
     say(
       `<b>${tileName(state.picked.id)}</b>를 버릴까요? 버린 패는 되돌릴 수 없습니다.`,
       `${tileName(state.picked.id)} 버리기?`
@@ -833,7 +833,7 @@ function onPointerDown(e) {
   if (!tile || !state.game) return;
   const index = Number(tile.dataset.index);
   clearTimeout(state.pressTimer);
-  state.pressTimer = setTimeout(() => startDrag(index, tile), 260);
+  state.pressTimer = setTimeout(() => startDrag(index, tile), 220);
 }
 
 function onPointerMove(e) {
@@ -869,7 +869,15 @@ function onPointerUp() {
   }
 }
 
+export const VERSION = "v12";
+
 export function boot() {
+  const ver = document.getElementById("ver");
+  if (ver) ver.textContent = VERSION;
+  // 길게 누르기가 iOS 돋보기·컨텍스트 메뉴에 먹히지 않게
+  document.addEventListener("contextmenu", (e) => {
+    if (e.target.closest?.("#myHand")) e.preventDefault();
+  });
   document.addEventListener("click", onClick);
   document.addEventListener("pointerdown", onPointerDown);
   document.addEventListener("pointermove", onPointerMove, { passive: false });
