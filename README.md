@@ -40,6 +40,15 @@ dragon. Rules engine is pure JS with unit tests; the table is three.js; every so
 WebAudio, no audio files. Learning mode coaches every discard; practice mode gets
 out of the way. See `mahjong/README.md`.
 
+## Also here: 영춘권 자세 가이드 (`/wingchun/`)
+
+A Wing Chun form-learning viewer. A Python pipeline (MediaPipe Pose + OpenCV) splits a
+practice video into frames, lifts 33 3D joints per frame, finds the held postures, and matches
+them to posture photos from a textbook. The three.js viewer plays the sequence as a 3D figure
+you can rotate, zoom, freeze per posture, or loop only the transition into the next posture,
+with a live joint-angle table compared against the book pose. Ships with demo data; see
+`wingchun/README.md` for running the pipeline on your own video.
+
 ## Run locally
 
 ```bash

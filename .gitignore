@@ -2,3 +2,6 @@ node_modules/
 .DS_Store
 *.log
 .gstack/
+wingchun/tools/models/
+wingchun/work/
+__pycache__/
