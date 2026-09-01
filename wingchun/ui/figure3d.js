@@ -241,10 +241,13 @@ export async function createFigure(canvas, { coarse = false } = {}) {
     }
   }
 
-  // 크기는 ResizeObserver로만 맞춘다 (매 프레임 clientWidth 읽기 = 강제 레이아웃)
-  let needResize = true;
-  const api = { onResize: null };
-  new ResizeObserver(() => { needResize = true; api.onResize?.(); }).observe(canvas);
+  // 크기는 ResizeObserver로만 맞춘다 (매 프레임 clientWidth 읽기 = 강제 레이아웃).
+  // 시점·크기·강조가 바뀌면 needsRender를 세운다 — 호출자는 자세 계산 없이 render()만 하면 된다.
+  let needResize = true, needsRender = true;
+  const ro = new ResizeObserver(() => { needResize = true; needsRender = true; });
+  ro.observe(canvas);
+  let onOrbitChange = null;
+  orbit.onChange = () => { needsRender = true; onOrbitChange?.(); };
   function resize() {
     if (!needResize) return;
     needResize = false;
@@ -255,14 +258,17 @@ export async function createFigure(canvas, { coarse = false } = {}) {
   }
 
   const proj = new THREE.Vector3();
-  return Object.assign(api, {
+  return {
     orbit,
+    /** 시점이 바뀔 때 알림 (orbit.onChange는 내부에서 쓰므로 여기로) */
+    set onOrbitChange(fn) { onOrbitChange = fn; },
+    get needsRender() { return needsRender; },
     setPose(lm) { currentLm = lm; poseBody(main, lm); updateHighlight(); },
     setGhost(lm) { ghost.group.visible = !!lm; if (lm) poseBody(ghost, lm); },
     setRef(lm) { ref.group.visible = !!lm; if (lm) poseBody(ref, lm); },
     /** 카메라로 인식한 내 자세 (분홍, 반투명) */
     setUser(lm) { user.group.visible = !!lm; if (lm) poseBody(user, lm); },
-    setHighlight(h) { highlight = h; updateHighlight(); },
+    setHighlight(h) { highlight = h; updateHighlight(); needsRender = true; },
     setView(name) { orbit.setView(name); },
     /** 월드 좌표 → 캔버스 픽셀 (라벨 위치). 화면 밖이면 null */
     project(p) {
@@ -270,7 +276,7 @@ export async function createFigure(canvas, { coarse = false } = {}) {
       if (proj.z > 1) return null;
       return { x: ((proj.x + 1) / 2) * canvas.clientWidth, y: ((1 - proj.y) / 2) * canvas.clientHeight };
     },
-    render() { resize(); ring.quaternion.copy(camera.quaternion); renderer.render(scene, camera); },
-    dispose() { renderer.dispose(); },
-  });
+    render() { needsRender = false; resize(); ring.quaternion.copy(camera.quaternion); renderer.render(scene, camera); },
+    dispose() { ro.disconnect(); renderer.dispose(); },
+  };
 }

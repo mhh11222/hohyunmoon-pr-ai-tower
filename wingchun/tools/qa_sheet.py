@@ -28,13 +28,12 @@ def main():
     out = Path(args.out or work / "qa"); out.mkdir(parents=True, exist_ok=True)
     frames = load_json(work / "landmarks.json")["frames"]
     poses = load_json(args.poses or work / "poses.json")
-    by_t = {f["t"]: f for f in frames}
     T = 220
     cells = []
     for p in poses:
-        if p.get("key") is None:
+        if p.get("frameIndex") is None:
             continue
-        f = by_t.get(p["key"])
+        f = frames[p["frameIndex"]]
         img_path = work / "frames" / f"{f['index']:06d}.jpg" if f else None
         v = cv2.imread(str(img_path)) if img_path and img_path.exists() else None
         cell = np.full((T + 22, 380, 3), 255, np.uint8)
@@ -56,12 +55,11 @@ def main():
         cv2.putText(cell, f"{p['id']} {p['name'][:8]} {p['key']:.1f}s", (4, 16), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 200), 1)
         cells.append(cell)
     n = 0
-    for s in range(0, len(cells), args.per_sheet):
+    for n, s in enumerate(range(0, len(cells), args.per_sheet), 1):
         part = cells[s:s + args.per_sheet]
         while len(part) % args.cols:
             part.append(np.full_like(cells[0], 255))
         rows = [np.hstack(part[i:i + args.cols]) for i in range(0, len(part), args.cols)]
-        n += 1
         cv2.imwrite(str(out / f"sheet{n}.jpg"), np.vstack(rows), [cv2.IMWRITE_JPEG_QUALITY, 82])
     log(f"[qa] {len(cells)}자세 → {out}/sheet1..{n}.jpg")
 

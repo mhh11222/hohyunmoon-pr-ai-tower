@@ -22,7 +22,7 @@ async function loadLandmarker(onStatus) {
     try { return await vision.PoseLandmarker.createFromOptions(files, opts("GPU")); }
     catch { return await vision.PoseLandmarker.createFromOptions(files, opts("CPU")); }
   })();
-  landmarkerPromise.catch(() => { landmarkerPromise = null; }); // 실패하면 다음에 다시 시도
+  landmarkerPromise = landmarkerPromise.catch((e) => { landmarkerPromise = null; e.phase = "model"; throw e; }); // 실패하면 다음에 다시 시도
   return landmarkerPromise;
 }
 

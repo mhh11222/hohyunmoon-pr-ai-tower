@@ -131,8 +131,7 @@ article { background: var(--panel); border: 1px solid var(--line); border-radius
 .card-head .idx { font-size: 11px; opacity: .55; }
 .card-head h2 { margin: 0; font-size: 18px; }
 .card-head .zh { font-size: 13px; opacity: .65; }
-#book { margin: 0 0 10px; }
-#book { min-height: 120px; }
+#book { margin: 0 0 10px; min-height: 120px; }
 #book img { width: auto; max-width: 100%; max-height: 360px; margin: 0 auto; border-radius: 8px; display: block; }
 #book figcaption { font-size: 11px; opacity: .55; margin-top: 4px; }
 #card-desc { margin: 0 0 8px; font-size: 14px; line-height: 1.5; }
@@ -191,6 +190,8 @@ button:disabled { opacity: .35; }
 .table-wrap { overflow-x: auto; }
 th.me, td.me { display: none; color: var(--user); }
 body.cam-on th.me, body.cam-on td.me { display: table-cell; }
+/* 카메라 켜짐 표시는 body.cam-on 하나로 */
+body:not(.cam-on) #cam-pip, body:not(.cam-on) #cam-score, body:not(.cam-on) #cam-tips { display: none; }
 
 /* 가로 화면(폰 가로·태블릿·PC): 왼쪽에 3D를 고정, 오른쪽을 스크롤 */
 @media (orientation: landscape) and (min-width: 700px) {
@@ -203,7 +204,7 @@ body.cam-on th.me, body.cam-on td.me { display: table-cell; }
 @media (orientation: landscape) and (max-height: 500px) {
   #views { top: auto; bottom: 6px; left: 8px; right: 8px; flex-direction: row; justify-content: center; }
   #stage-hint { display: none; }
-  #camera .privacy, #cam-status { display: none; }
+  .hint { display: none; }
 }
 @media (orientation: landscape) and (min-width: 1100px) {
   #info { grid-template-columns: 1fr 1fr; }
