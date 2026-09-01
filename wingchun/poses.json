@@ -718,5 +718,95 @@
   "transition": "오른발 전진, 오른 종권",
   "image": "book/80.jpg",
   "cues": []
+ },
+ {
+  "id": "p81",
+  "name": "전신우충권",
+  "zh": "轉身右冲拳 Zhuǎnshēn yòu chōng quán",
+  "desc": "왼발을 앞으로 밀며, 오른손은 종권으로 지른다.",
+  "transition": "왼발 전진, 오른 종권",
+  "image": "book/81.jpg",
+  "cues": []
+ },
+ {
+  "id": "p82",
+  "name": "우삭수",
+  "zh": "右削手 Yòu xuē shǒu",
+  "desc": "정자세에서 오른손은 왼팔 위에 올리고 방어자세를 취한다.",
+  "transition": "정자세로 서며 오른손을 왼팔 위에 올린다",
+  "image": "book/82.jpg",
+  "cues": []
+ },
+ {
+  "id": "p83",
+  "name": "좌삭수",
+  "zh": "左削手 Zuǒ xuē shǒu",
+  "desc": "오른손을 밀고 왼손을 빼면서 방어자세를 취한다.",
+  "transition": "오른손을 밀고 왼손을 빼며 방어",
+  "image": "book/83.jpg",
+  "cues": []
+ },
+ {
+  "id": "p84",
+  "name": "우삭수",
+  "zh": "右削手 Yòu xuē shǒu",
+  "desc": "양손을 열십자로 교차시킨다.",
+  "transition": "양손 열십자 교차",
+  "image": "book/84.jpg",
+  "cues": []
+ },
+ {
+  "id": "p85",
+  "name": "좌충권",
+  "zh": "左冲拳 Zuǒ chōng quán",
+  "desc": "오른손은 당기고, 왼손은 종권으로 지른다.",
+  "transition": "왼 종권",
+  "image": "book/85.jpg",
+  "cues": []
+ },
+ {
+  "id": "p86",
+  "name": "우충권",
+  "zh": "右冲拳 Yòu chōng quán",
+  "desc": "왼손은 당기고, 오른손은 종권으로 지른다.",
+  "transition": "오른 종권 (연환)",
+  "image": "book/86.jpg",
+  "cues": []
+ },
+ {
+  "id": "p87",
+  "name": "좌충권",
+  "zh": "左冲拳 Zuǒ chōng quán",
+  "desc": "오른손은 당기고, 왼손은 종권으로 지른다.",
+  "transition": "왼 종권 (연환)",
+  "image": "book/87.jpg",
+  "cues": []
+ },
+ {
+  "id": "p88",
+  "name": "우권수",
+  "zh": "右圈手 Yòu quān shǒu",
+  "desc": "왼쪽 손목을 꺾어준다.",
+  "transition": "손목을 돌려 꺾는다",
+  "image": "book/88.jpg",
+  "cues": []
+ },
+ {
+  "id": "p89",
+  "name": "수권",
+  "zh": "收拳 Shōu quán",
+  "desc": "왼손을 가슴쪽으로 당겨준 후, 양팔을 아래로 내리면서.",
+  "transition": "왼손을 가슴으로 당긴 뒤 양팔을 내린다",
+  "image": "book/89.jpg",
+  "cues": []
+ },
+ {
+  "id": "p90",
+  "name": "수세",
+  "zh": "收勢 Shōu shì",
+  "desc": "준비 자세로 돌아오면서 마무리한다.",
+  "transition": "발을 모으고 준비 자세로",
+  "image": "book/90.jpg",
+  "cues": []
  }
 ]
