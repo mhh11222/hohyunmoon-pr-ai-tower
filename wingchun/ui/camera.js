@@ -2,9 +2,29 @@
 // 파이프라인(tools/)과 같은 모델 계열이라 좌표 규약도 같게 맞춘다: [x, -y, -z].
 import { BONES } from "../src/skeleton.js";
 
-// 버전을 고정한다: 범위 지정("@0.10")은 CDN이 새 버전을 내놓을 때 동작이 바뀔 수 있다.
-const MP = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21";
-const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task";
+// 라이브러리·WASM·모델을 저장소 안(vendor/mediapipe, 0.10.21 고정)에서 불러온다 — 외부 CDN 없음, CSP 'self'만으로 동작.
+const MP = new URL("../vendor/mediapipe/", import.meta.url).href.replace(/\/$/, "");
+const MODEL = `${MP}/pose_landmarker_lite.task`;
+
+// 라이브러리·모델은 한 번만 내려받아 페이지가 살아 있는 동안 재사용한다 (껐다 켜도 다시 받지 않음)
+let landmarkerPromise = null;
+async function loadLandmarker(onStatus) {
+  if (landmarkerPromise) return landmarkerPromise;
+  landmarkerPromise = (async () => {
+    onStatus("자세 인식 모델 불러오는 중…");
+    const vision = await import(`${MP}/vision_bundle.mjs`);
+    const files = await vision.FilesetResolver.forVisionTasks(`${MP}/wasm`);
+    const opts = (delegate) => ({
+      baseOptions: { modelAssetPath: MODEL, delegate },
+      runningMode: "VIDEO", numPoses: 1,
+      minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.5,
+    });
+    try { return await vision.PoseLandmarker.createFromOptions(files, opts("GPU")); }
+    catch { return await vision.PoseLandmarker.createFromOptions(files, opts("CPU")); }
+  })();
+  landmarkerPromise.catch(() => { landmarkerPromise = null; }); // 실패하면 다음에 다시 시도
+  return landmarkerPromise;
+}
 
 /**
  * @param {HTMLVideoElement} video  카메라 화면
@@ -12,22 +32,8 @@ const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/p
  * @param {(lm: number[][]|null) => void} onPose  프레임마다 3D 관절(뷰어 좌표) 또는 null
  * @param {(msg: string) => void} onStatus  진행 메시지
  */
-export async function startCamera({ video, overlay, onPose, onStatus }) {
-  onStatus("자세 인식 모델 불러오는 중…");
-  const vision = await import(`${MP}/vision_bundle.mjs`);
-  const files = await vision.FilesetResolver.forVisionTasks(`${MP}/wasm`);
-  let landmarker;
-  try {
-    landmarker = await vision.PoseLandmarker.createFromOptions(files, {
-      baseOptions: { modelAssetPath: MODEL, delegate: "GPU" },
-      runningMode: "VIDEO", numPoses: 1,
-      minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.5,
-    });
-  } catch {
-    landmarker = await vision.PoseLandmarker.createFromOptions(files, {
-      baseOptions: { modelAssetPath: MODEL, delegate: "CPU" }, runningMode: "VIDEO", numPoses: 1,
-    });
-  }
+export async function startCamera({ video, overlay, onPose, onStatus, onEnded }) {
+  const landmarker = await loadLandmarker(onStatus);
   onStatus("카메라 켜는 중…");
   const stream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false,
@@ -35,12 +41,17 @@ export async function startCamera({ video, overlay, onPose, onStatus }) {
   video.srcObject = stream;
   await video.play();
   onStatus("");
+  // 캔버스 크기는 한 번만 맞춘다 (매 프레임 width 대입은 캔버스를 매번 비운다)
+  overlay.width = video.videoWidth || 640; overlay.height = video.videoHeight || 480;
+  // 다른 앱이 카메라를 가져가거나 사용자가 권한을 끄면 알려서 화면을 정리한다
+  const track = stream.getVideoTracks()[0];
+  if (track) track.addEventListener("ended", () => { if (running) { running = false; onEnded?.(); } });
 
   const ctx = overlay.getContext("2d");
-  let running = true, lastTime = -1, fps = 0, frames = 0, fpsAt = performance.now();
+  let running = true, lastTime = -1;
 
   function draw(norm) {
-    const w = overlay.width = video.videoWidth || 640, h = overlay.height = video.videoHeight || 480;
+    const w = overlay.width, h = overlay.height;
     ctx.clearRect(0, 0, w, h);
     if (!norm) return;
     ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,79,216,.9)"; ctx.fillStyle = "#fff";
@@ -61,21 +72,16 @@ export async function startCamera({ video, overlay, onPose, onStatus }) {
         onPose(world.map((p) => [p.x, -p.y, -p.z]));
         draw(res.landmarks[0]);
       } else { onPose(null); draw(null); }
-      frames++;
-      const now = performance.now();
-      if (now - fpsAt > 1000) { fps = frames * 1000 / (now - fpsAt); frames = 0; fpsAt = now; }
     }
     requestAnimationFrame(loop);
   }
   loop();
 
   return {
-    get fps() { return fps; },
     stop() {
       running = false;
       stream.getTracks().forEach((t) => t.stop());
       video.srcObject = null;
-      try { landmarker.close(); } catch { /* 무시 */ }
       ctx.clearRect(0, 0, overlay.width, overlay.height);
     },
   };

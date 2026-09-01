@@ -16,7 +16,7 @@ import numpy as np
 
 MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
-    "pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task"
+    "pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task"
 )
 DEFAULT_MODEL = Path(__file__).resolve().parent / "models" / "pose_landmarker_heavy.task"
 

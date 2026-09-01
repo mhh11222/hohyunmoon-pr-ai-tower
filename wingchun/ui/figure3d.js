@@ -31,7 +31,7 @@ const JOINT_RADIUS = (i) => {
   return 0.036;
 };
 
-export async function createFigure(canvas) {
+export async function createFigure(canvas, { coarse = false } = {}) {
   let THREE;
   try {
     // CSP(script-src 'self')와 맞추기 위해 importmap 없이 상대 경로로 직접 불러온다
@@ -46,8 +46,9 @@ export async function createFigure(canvas) {
   } catch {
     return null;
   }
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-  renderer.shadowMap.enabled = true;
+  // 폰(터치)에서는 픽셀 비율을 낮추고 그림자를 끈다 — 배터리·발열
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, coarse ? 1.5 : 2));
+  renderer.shadowMap.enabled = !coarse;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
@@ -188,11 +189,18 @@ export async function createFigure(canvas) {
   );
   ring.visible = false;
   scene.add(ring);
-  const arcGeo = new THREE.BufferGeometry();
-  const arcLine = new THREE.Line(arcGeo, new THREE.LineBasicMaterial({ color: COLORS.arc, linewidth: 2 }));
-  const arcFill = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: COLORS.arc, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }));
+  // 각도 호: 정점 버퍼를 한 번만 만들고 매 프레임 값만 갱신한다
+  const ARC_N = 24;
+  const arcPos = new THREE.Float32BufferAttribute(new Float32Array((ARC_N + 1) * 3), 3);
+  const arcGeo = new THREE.BufferGeometry(); arcGeo.setAttribute("position", arcPos);
+  const arcLine = new THREE.Line(arcGeo, new THREE.LineBasicMaterial({ color: COLORS.arc }));
+  const fillPos = new THREE.Float32BufferAttribute(new Float32Array(ARC_N * 9), 3);
+  const fillGeo = new THREE.BufferGeometry(); fillGeo.setAttribute("position", fillPos);
+  const arcFill = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: COLORS.arc, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false }));
   arcLine.visible = arcFill.visible = false;
+  arcLine.frustumCulled = arcFill.frustumCulled = false;
   scene.add(arcLine, arcFill);
+  const tmpB = new THREE.Vector3(), tmpU = new THREE.Vector3(), tmpW = new THREE.Vector3(), tmpN = new THREE.Vector3(), tmpP = new THREE.Vector3(), tmpQ = new THREE.Vector3();
 
   let currentLm = null;
   let highlight = null; // {a,b,c} 또는 {joint}
@@ -206,41 +214,48 @@ export async function createFigure(canvas) {
     ring.quaternion.copy(camera.quaternion);
     ring.visible = true;
     if (highlight.a !== undefined && highlight.c !== undefined) {
-      const b = new THREE.Vector3().fromArray(lm[highlight.b]);
-      const u = new THREE.Vector3().fromArray(lm[highlight.a]).sub(b).normalize();
-      const w = new THREE.Vector3().fromArray(lm[highlight.c]).sub(b).normalize();
-      const ang = Math.acos(Math.max(-1, Math.min(1, u.dot(w))));
-      const n = new THREE.Vector3().crossVectors(u, w);
-      if (n.lengthSq() < 1e-8) n.set(0, 1, 0);
-      n.normalize();
-      const R = 0.11, N = 24;
-      const pts = [], tri = [];
-      for (let i = 0; i <= N; i++) {
-        const p = u.clone().applyAxisAngle(n, (ang * i) / N).multiplyScalar(R).add(b);
-        pts.push(p);
+      tmpB.fromArray(lm[highlight.b]);
+      tmpU.fromArray(lm[highlight.a]).sub(tmpB).normalize();
+      tmpW.fromArray(lm[highlight.c]).sub(tmpB).normalize();
+      const ang = Math.acos(Math.max(-1, Math.min(1, tmpU.dot(tmpW))));
+      tmpN.crossVectors(tmpU, tmpW);
+      if (tmpN.lengthSq() < 1e-8) tmpN.set(0, 1, 0);
+      tmpN.normalize();
+      const R = 0.11;
+      tmpQ.copy(tmpU).multiplyScalar(R).add(tmpB);
+      for (let i = 0; i <= ARC_N; i++) {
+        tmpP.copy(tmpU).applyAxisAngle(tmpN, (ang * i) / ARC_N).multiplyScalar(R).add(tmpB);
+        arcPos.setXYZ(i, tmpP.x, tmpP.y, tmpP.z);
+        if (i > 0) {
+          const k = (i - 1) * 3;
+          fillPos.setXYZ(k, tmpB.x, tmpB.y, tmpB.z);
+          fillPos.setXYZ(k + 1, tmpQ.x, tmpQ.y, tmpQ.z);
+          fillPos.setXYZ(k + 2, tmpP.x, tmpP.y, tmpP.z);
+        }
+        tmpQ.copy(tmpP);
       }
-      arcGeo.setFromPoints(pts);
-      for (let i = 0; i < N; i++) tri.push(b.x, b.y, b.z, pts[i].x, pts[i].y, pts[i].z, pts[i + 1].x, pts[i + 1].y, pts[i + 1].z);
-      arcFill.geometry.dispose();
-      arcFill.geometry = new THREE.BufferGeometry();
-      arcFill.geometry.setAttribute("position", new THREE.Float32BufferAttribute(tri, 3));
+      arcPos.needsUpdate = true; fillPos.needsUpdate = true;
       arcLine.visible = arcFill.visible = true;
     } else {
       arcLine.visible = arcFill.visible = false;
     }
   }
 
+  // 크기는 ResizeObserver로만 맞춘다 (매 프레임 clientWidth 읽기 = 강제 레이아웃)
+  let needResize = true;
+  const api = { onResize: null };
+  new ResizeObserver(() => { needResize = true; api.onResize?.(); }).observe(canvas);
   function resize() {
+    if (!needResize) return;
+    needResize = false;
     const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
-    if (canvas.width !== Math.floor(w * renderer.getPixelRatio()) || canvas.height !== Math.floor(h * renderer.getPixelRatio())) {
-      renderer.setSize(w, h, false);
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-    }
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
   }
 
   const proj = new THREE.Vector3();
-  return {
+  return Object.assign(api, {
     orbit,
     setPose(lm) { currentLm = lm; poseBody(main, lm); updateHighlight(); },
     setGhost(lm) { ghost.group.visible = !!lm; if (lm) poseBody(ghost, lm); },
@@ -257,5 +272,5 @@ export async function createFigure(canvas) {
     },
     render() { resize(); ring.quaternion.copy(camera.quaternion); renderer.render(scene, camera); },
     dispose() { renderer.dispose(); },
-  };
+  });
 }

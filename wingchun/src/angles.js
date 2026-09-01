@@ -18,8 +18,11 @@ export function normalize(a) {
 export function mid(a, b) { return scale(add(a, b), 0.5); }
 export function dist(a, b) { return length(sub(a, b)); }
 
-/** 두 벡터 사이 각(도) */
+const EPS = 1e-6;
+
+/** 두 벡터 사이 각(도). 어느 한쪽이 영벡터(관절이 겹침)면 null — 그럴듯한 숫자 대신 "모름" */
 export function angleBetween(u, v) {
+  if (length(u) < EPS || length(v) < EPS) return null;
   const d = dot(normalize(u), normalize(v));
   return Math.acos(Math.max(-1, Math.min(1, d))) * RAD;
 }
@@ -52,12 +55,14 @@ export function toBody(p, frame) {
 
 /** 벡터가 수평면과 이루는 각(도). +면 위로 향함 */
 export function elevation(v, frame) {
+  if (length(v) < EPS) return null;
   const n = normalize(v);
   return Math.asin(Math.max(-1, Math.min(1, dot(n, frame.up)))) * RAD;
 }
 
 /** 벡터를 수평면에 투영했을 때 "앞" 방향에서 왼쪽(+)/오른쪽(-)으로 벗어난 각(도) */
 export function yaw(v, frame) {
+  if (length(v) < EPS) return null;
   const x = dot(v, frame.left);
   const z = dot(v, frame.forward);
   return Math.atan2(x, z) * RAD;
@@ -126,7 +131,7 @@ export function compareAngles(cur, ref) {
   const r = anglesByKey(ref);
   return cur.map((a) => {
     const b = r[a.key];
-    if (!b) return { ...a, ref: null, delta: null };
+    if (!b || a.value == null || b.value == null) return { ...a, ref: b?.value ?? null, delta: null };
     let delta = a.value - b.value;
     if (a.kind === "yaw") delta = ((delta + 540) % 360) - 180;
     return { ...a, ref: b.value, delta };
@@ -177,6 +182,7 @@ export function describeTransition(fromLm, toLm, { threshold = 8, limit = 6 } = 
     to: a.value,
     delta: a.delta,
     unit: a.unit,
+    verb: VERB[a.kind](a.delta),
     text: `${a.label} ${fmt(a.ref, a.unit)} → ${fmt(a.value, a.unit)} (${fmt(Math.abs(a.delta), a.unit)} ${VERB[a.kind](a.delta)})`,
   }));
 }
