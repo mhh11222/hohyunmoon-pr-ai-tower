@@ -174,13 +174,14 @@ button:disabled { opacity: .35; }
 #cam-score b { font-size: 22px; color: var(--user); font-variant-numeric: tabular-nums; }
 #cam-score span { font-size: 10px; opacity: .7; }
 #camera { display: grid; gap: 6px; }
-.cam-row { display: flex; align-items: center; gap: 10px; }
+.cam-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; }
 #cam-toggle {
   flex: 0 0 auto; padding: 9px 14px; border-radius: 10px; border: 1px solid var(--user);
   background: transparent; color: var(--ink); font-size: 13px; font-weight: 600;
 }
 #cam-toggle.on { background: var(--user); color: #2a0022; }
-#cam-status { font-size: 12px; opacity: .7; line-height: 1.4; }
+#cam-status { font-size: 12px; opacity: .7; line-height: 1.4; flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+#camera .privacy { margin: 0; font-size: 11px; opacity: .55; line-height: 1.4; }
 #cam-tips { margin: 0; padding: 8px 8px 8px 24px; border-radius: 10px; background: rgba(255,79,216,.1); font-size: 13px; line-height: 1.6; }
 #cam-tips li.ok { list-style: "✓ "; color: var(--ok); }
 .table-wrap { overflow-x: auto; }
@@ -190,8 +191,9 @@ body.cam-on th.me, body.cam-on td.me { display: table-cell; }
 /* 가로 화면(폰 가로·태블릿·PC): 왼쪽에 3D를 고정, 오른쪽을 스크롤 */
 @media (orientation: landscape) and (min-width: 700px) {
   #app { max-width: none; display: grid; grid-template-columns: minmax(340px, 46%) 1fr; gap: 12px; align-items: start; padding: 8px 12px; }
-  #col-stage { position: sticky; top: 8px; display: flex; flex-direction: column; gap: 8px; height: calc(100dvh - 16px); }
-  #stage { flex: 1 1 auto; height: auto; min-height: 260px; }
+  #col-stage { position: sticky; top: 8px; display: flex; flex-direction: column; gap: 8px; height: calc(100dvh - 16px); overflow-y: auto; scrollbar-width: thin; }
+  #stage { flex: 1 1 auto; height: auto; min-height: 220px; }
+  #stage-hint { display: none; }
   #col-panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 }
 @media (orientation: landscape) and (min-width: 1100px) {

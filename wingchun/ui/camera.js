@@ -2,7 +2,8 @@
 // 파이프라인(tools/)과 같은 모델 계열이라 좌표 규약도 같게 맞춘다: [x, -y, -z].
 import { BONES } from "../src/skeleton.js";
 
-const MP = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10";
+// 버전을 고정한다: 범위 지정("@0.10")은 CDN이 새 버전을 내놓을 때 동작이 바뀔 수 있다.
+const MP = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21";
 const MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task";
 
 /**

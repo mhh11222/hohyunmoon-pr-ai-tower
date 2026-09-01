@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#151a18">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
 <title>영춘권 자세 가이드</title>
 <meta name="description" content="영춘권 기본 연속동작을 3D 인체로 재생하고, 자세마다 멈춰 각도와 전환 동작을 확인하며, 카메라로 내 자세를 실시간 대조하는 학습 가이드.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23151a18'/%3E%3Ctext x='16' y='24' font-size='20' text-anchor='middle' fill='%232ec4b6'%3E詠%3C/text%3E%3C/svg%3E">
@@ -48,6 +51,7 @@
       <button id="cam-toggle">📷 내 자세 대조</button>
       <span id="cam-status">카메라로 내 자세를 인식해 화면의 자세와 겹쳐 비교합니다. 전신이 나오게 폰을 세워 두세요.</span>
     </div>
+    <p class="privacy">🔒 카메라 영상은 이 기기 안에서만 처리되고 어디로도 전송·저장되지 않습니다. 인식 모델만 처음 한 번 내려받습니다.</p>
     <ul id="cam-tips" hidden></ul>
   </section>
 </div>
@@ -115,16 +119,6 @@
   </footer>
 </div>
 </div>
-<script type="importmap">
-{
-  "imports": {
-    "three": "../mahjong/vendor/three.module.min.js"
-  }
-}
-</script>
-<script type="module">
-  import { boot } from "./ui/app.js";
-  boot();
-</script>
+<script type="module" src="ui/boot.js"></script>
 </body>
 </html>

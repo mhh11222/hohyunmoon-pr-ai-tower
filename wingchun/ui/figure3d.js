@@ -34,7 +34,8 @@ const JOINT_RADIUS = (i) => {
 export async function createFigure(canvas) {
   let THREE;
   try {
-    THREE = await import("three");
+    // CSP(script-src 'self')와 맞추기 위해 importmap 없이 상대 경로로 직접 불러온다
+    THREE = await import("../../mahjong/vendor/three.module.min.js");
   } catch (e) {
     console.error(e);
     return null;
