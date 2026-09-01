@@ -12,8 +12,10 @@
   --ok: #7bdc6a;
   --warn: #ffd166;
   --bad: #ff6b6b;
+  --user: #ff4fd8;
   color-scheme: dark;
 }
+#col-stage, #col-panel { display: flex; flex-direction: column; gap: 8px; }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
@@ -159,7 +161,43 @@ footer a { color: inherit; }
 
 button:disabled { opacity: .35; }
 
-@media (min-width: 720px) {
+/* 카메라 대조 */
+#cam-pip {
+  position: absolute; left: 10px; bottom: 26px; width: 120px; aspect-ratio: 3 / 4; border-radius: 8px; overflow: hidden;
+  border: 2px solid var(--user); background: #000; transform: scaleX(-1); pointer-events: none;
+}
+#cam-pip video, #cam-pip canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#cam-score {
+  position: absolute; right: 8px; bottom: 26px; display: flex; flex-direction: column; align-items: center;
+  padding: 6px 12px; border-radius: 10px; background: rgba(0,0,0,.55); border: 1px solid var(--user); pointer-events: none;
+}
+#cam-score b { font-size: 22px; color: var(--user); font-variant-numeric: tabular-nums; }
+#cam-score span { font-size: 10px; opacity: .7; }
+#camera { display: grid; gap: 6px; }
+.cam-row { display: flex; align-items: center; gap: 10px; }
+#cam-toggle {
+  flex: 0 0 auto; padding: 9px 14px; border-radius: 10px; border: 1px solid var(--user);
+  background: transparent; color: var(--ink); font-size: 13px; font-weight: 600;
+}
+#cam-toggle.on { background: var(--user); color: #2a0022; }
+#cam-status { font-size: 12px; opacity: .7; line-height: 1.4; }
+#cam-tips { margin: 0; padding: 8px 8px 8px 24px; border-radius: 10px; background: rgba(255,79,216,.1); font-size: 13px; line-height: 1.6; }
+#cam-tips li.ok { list-style: "✓ "; color: var(--ok); }
+.table-wrap { overflow-x: auto; }
+th.me, td.me { display: none; color: var(--user); }
+body.cam-on th.me, body.cam-on td.me { display: table-cell; }
+
+/* 가로 화면(폰 가로·태블릿·PC): 왼쪽에 3D를 고정, 오른쪽을 스크롤 */
+@media (orientation: landscape) and (min-width: 700px) {
+  #app { max-width: none; display: grid; grid-template-columns: minmax(340px, 46%) 1fr; gap: 12px; align-items: start; padding: 8px 12px; }
+  #col-stage { position: sticky; top: 8px; display: flex; flex-direction: column; gap: 8px; height: calc(100dvh - 16px); }
+  #stage { flex: 1 1 auto; height: auto; min-height: 260px; }
+  #col-panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+}
+@media (orientation: landscape) and (min-width: 1100px) {
+  #info { grid-template-columns: 1fr 1fr; }
+}
+@media (orientation: portrait) and (min-width: 720px) {
   #stage { height: 520px; }
   #info { grid-template-columns: 1fr 1fr; }
 }

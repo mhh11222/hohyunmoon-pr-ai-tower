@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { angleAt, angleBetween, bodyFrame, toBody, elevation, yaw, jointAngles, compareAngles, describeTransition } from "../src/angles.js";
+import { angleAt, angleBetween, bodyFrame, toBody, elevation, yaw, jointAngles, compareAngles, describeTransition, matchScore } from "../src/angles.js";
 import { J } from "../src/skeleton.js";
 import { sequence } from "../data/demo.js";
 
@@ -75,5 +75,15 @@ describe("describeTransition", () => {
   });
   it("같은 자세면 비어 있다", () => {
     expect(describeTransition(lmOf("p02"), lmOf("p02"))).toEqual([]);
+  });
+});
+
+describe("matchScore", () => {
+  it("같은 자세는 100, 다른 자세는 낮다", () => {
+    expect(matchScore(lmOf("p06"), lmOf("p06")).score).toBe(100);
+    const r = matchScore(lmOf("p01"), lmOf("p06"));
+    expect(r.score).toBeLessThan(80);
+    expect(r.worst.length).toBe(3);
+    expect(r.worst.every((w) => Math.abs(w.delta) >= r.mean)).toBe(true);
   });
 });

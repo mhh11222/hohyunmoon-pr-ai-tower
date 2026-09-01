@@ -1,8 +1,9 @@
 // 영춘권 자세 가이드 — 화면 제어. 데이터(data/sequence.js)와 순수 계산(src/)을 3D(figure3d)와 DOM에 잇는다.
 import { sequence } from "../data/sequence.js";
 import { frameAt, duration, poseIndexAt, transitionOf, alignToPose, validateSequence, autoPoses } from "../src/sequence.js";
-import { jointAngles, compareAngles, describeTransition, ANGLE_DEFS } from "../src/angles.js";
+import { jointAngles, compareAngles, describeTransition, matchScore, ANGLE_DEFS } from "../src/angles.js";
 import { createFigure } from "./figure3d.js";
+import { startCamera } from "./camera.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -35,6 +36,8 @@ export async function boot() {
     showRef: false,
     selectedAngle: null,   // ANGLE_DEFS key
     range: [0, total],
+    userLm: null,          // 카메라로 인식한 내 자세
+    cam: null,             // 카메라 핸들
   };
 
   const poseAt = (i) => timed[Math.max(0, Math.min(timed.length - 1, i))];
@@ -180,7 +183,7 @@ export async function boot() {
       const tr = document.createElement("tr");
       tr.className = d.side;
       tr.dataset.key = d.key;
-      tr.innerHTML = `<td>${d.label}</td><td class="cur">–</td><td class="ref">–</td><td class="delta">–</td>`;
+      tr.innerHTML = `<td>${d.label}</td><td class="cur">–</td><td class="ref">–</td><td class="delta">–</td><td class="me me-cur">–</td><td class="me me-delta">–</td>`;
       tr.addEventListener("click", () => selectAngle(st.selectedAngle === d.key ? null : d.key));
       tbody.append(tr);
       angleRows.set(d.key, tr);
@@ -201,7 +204,17 @@ export async function boot() {
     const ref = refAnglesOf(poseAt(st.poseIdx));
     const rows = ref ? compareAngles(cur, ref) : cur.map((a) => ({ ...a, ref: null, delta: null }));
     lastAngles = rows;
+    const me = st.userLm ? anglesByKeyOf(compareAngles(jointAngles(st.userLm), cur)) : null;
     for (const a of rows) {
+      if (me) {
+        const m = me[a.key];
+        const tr0 = angleRows.get(a.key);
+        tr0.querySelector(".me-cur").textContent = `${Math.round(m.value)}${m.unit}`;
+        const md = tr0.querySelector(".me-delta");
+        const abs = Math.abs(m.delta), tol = m.unit === "cm" ? [4, 8] : [10, 20];
+        md.textContent = `${m.delta > 0 ? "+" : ""}${Math.round(m.delta)}${m.unit}`;
+        md.className = `me me-delta ${abs <= tol[0] ? "d-ok" : abs <= tol[1] ? "d-warn" : "d-bad"}`;
+      }
       const tr = angleRows.get(a.key);
       tr.querySelector(".cur").textContent = `${Math.round(a.value)}${a.unit}`;
       tr.querySelector(".ref").textContent = a.ref == null ? "–" : `${Math.round(a.ref)}${a.unit}`;
@@ -214,6 +227,55 @@ export async function boot() {
         d.className = `delta ${abs <= tol[0] ? "d-ok" : abs <= tol[1] ? "d-warn" : "d-bad"}`;
       }
     }
+  }
+
+  function anglesByKeyOf(list) { return Object.fromEntries(list.map((a) => [a.key, a])); }
+
+  // ---------- 카메라 대조 ----------
+  const camBtn = $("cam-toggle"), camStatus = $("cam-status"), camTips = $("cam-tips");
+  async function toggleCamera() {
+    if (st.cam) {
+      st.cam.stop(); st.cam = null; st.userLm = null;
+      figure?.setUser(null);
+      document.body.classList.remove("cam-on"); camBtn.classList.remove("on");
+      $("cam-pip").hidden = true; $("cam-score").hidden = true; camTips.hidden = true;
+      camStatus.textContent = "카메라를 껐습니다.";
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) { camStatus.textContent = "이 브라우저는 카메라를 지원하지 않습니다. HTTPS 주소에서 열어야 합니다."; return; }
+    camBtn.disabled = true;
+    try {
+      st.cam = await startCamera({
+        video: $("cam-video"), overlay: $("cam-overlay"),
+        onPose: (lm) => { st.userLm = lm; },
+        onStatus: (m) => { camStatus.textContent = m; },
+      });
+      document.body.classList.add("cam-on"); camBtn.classList.add("on");
+      $("cam-pip").hidden = false; $("cam-score").hidden = false; camTips.hidden = false;
+      camStatus.textContent = "분홍 인체가 내 자세입니다. 화면의 자세(자세 고정 모드 추천)와 겹쳐 보세요.";
+    } catch (e) {
+      console.error(e);
+      camStatus.textContent = `카메라를 켜지 못했습니다: ${e?.message || e}. 카메라 권한을 허용했는지, HTTPS 주소인지 확인하세요.`;
+      st.cam = null;
+    }
+    camBtn.disabled = false;
+  }
+  camBtn.addEventListener("click", toggleCamera);
+
+  let scoreAcc = 0;
+  function updateScore(lm, dt) {
+    scoreAcc += dt;
+    if (scoreAcc < 0.15) return;
+    scoreAcc = 0;
+    const box = $("cam-score");
+    if (!st.userLm) { $("score-num").textContent = "–"; camTips.innerHTML = "<li>카메라에 전신이 보이지 않습니다</li>"; return; }
+    const { score } = matchScore(st.userLm, lm);
+    $("score-num").textContent = `${score}%`;
+    box.style.borderColor = score >= 80 ? "var(--ok)" : score >= 55 ? "var(--warn)" : "var(--bad)";
+    const steps = describeTransition(st.userLm, lm, { threshold: 12, limit: 3 });
+    camTips.innerHTML = "";
+    if (!steps.length) { const li = document.createElement("li"); li.className = "ok"; li.textContent = "화면 자세와 거의 같습니다"; camTips.append(li); }
+    for (const s of steps) { const li = document.createElement("li"); li.textContent = `${s.label}: 지금 ${Math.round(s.ref)}${s.unit} → ${Math.round(s.to)}${s.unit}로 ${Math.round(Math.abs(s.delta))}${s.unit} ${s.text.split(" ").pop().replace(")", "")}`; camTips.append(li); }
   }
 
   function updateLabels(lm) {
@@ -295,8 +357,10 @@ export async function boot() {
       else if (st.ghost && st.mode === "play" && st.poseIdx > 0) ghostLm = frameAt(seq, poseAt(st.poseIdx - 1).key);
       figure.setGhost(ghostLm);
       figure.setRef(st.showRef && p?.ref ? alignToPose(p.ref, lm) : null);
+      figure.setUser(st.userLm ? alignToPose(st.userLm, lm) : null);
       figure.render();
     }
+    if (st.cam) updateScore(lm, dt);
     $("scrub").value = st.t;
     $("clock").textContent = `${st.t.toFixed(2)}s`;
     acc += dt;

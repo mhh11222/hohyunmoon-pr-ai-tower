@@ -10,6 +10,7 @@ const COLORS = {
   bone: 0xd9d2c0,
   ghost: 0x9aa4b2,
   ref: 0x7bdc6a,
+  user: 0xff4fd8,
   arc: 0xfff275,
   select: 0xffffff,
 };
@@ -174,8 +175,10 @@ export async function createFigure(canvas) {
   const main = buildBody();
   const ghost = buildBody({ opacity: 0.28, tint: COLORS.ghost, castShadow: false });
   const ref = buildBody({ opacity: 0.45, tint: COLORS.ref, castShadow: false });
+  const user = buildBody({ opacity: 0.6, tint: COLORS.user, castShadow: false });
   ghost.group.visible = false;
   ref.group.visible = false;
+  user.group.visible = false;
 
   // 선택 관절 하이라이트 링 + 각도 호
   const ring = new THREE.Mesh(
@@ -241,6 +244,8 @@ export async function createFigure(canvas) {
     setPose(lm) { currentLm = lm; poseBody(main, lm); updateHighlight(); },
     setGhost(lm) { ghost.group.visible = !!lm; if (lm) poseBody(ghost, lm); },
     setRef(lm) { ref.group.visible = !!lm; if (lm) poseBody(ref, lm); },
+    /** 카메라로 인식한 내 자세 (분홍, 반투명) */
+    setUser(lm) { user.group.visible = !!lm; if (lm) poseBody(user, lm); },
     setHighlight(h) { highlight = h; updateHighlight(); },
     setView(name) { orbit.setView(name); },
     /** 월드 좌표 → 캔버스 픽셀 (라벨 위치). 화면 밖이면 null */

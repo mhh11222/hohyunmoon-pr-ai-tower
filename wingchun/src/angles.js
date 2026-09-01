@@ -133,6 +133,22 @@ export function compareAngles(cur, ref) {
   });
 }
 
+/** 일치도 계산에 쓰는 각도 (몸통·팔·다리의 큰 각. 손목·발 방향처럼 흔들리는 값은 뺀다) */
+export const SCORE_KEYS = ["l_elbow", "r_elbow", "l_shoulder", "r_shoulder", "l_forearm_elev", "r_forearm_elev", "l_knee", "r_knee", "l_hip", "r_hip"];
+
+/**
+ * 내 자세가 목표 자세와 얼마나 맞는지 0~100.
+ * 평균 각도 차이 0° = 100, fullOff(기본 40°) 이상 = 0. 함께 가장 크게 벗어난 항목도 돌려준다.
+ */
+export function matchScore(userLm, targetLm, { keys = SCORE_KEYS, fullOff = 40 } = {}) {
+  const diffs = compareAngles(jointAngles(userLm), jointAngles(targetLm)).filter((a) => keys.includes(a.key) && a.delta !== null);
+  if (!diffs.length) return { score: 0, mean: null, worst: [] };
+  const mean = diffs.reduce((s, a) => s + Math.abs(a.delta), 0) / diffs.length;
+  const score = Math.round(Math.max(0, Math.min(100, 100 * (1 - mean / fullOff))));
+  const worst = [...diffs].sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta)).slice(0, 3);
+  return { score, mean, worst };
+}
+
 function fmt(v, unit) {
   return `${Math.round(v)}${unit}`;
 }
