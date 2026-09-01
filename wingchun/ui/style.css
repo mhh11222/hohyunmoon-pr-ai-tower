@@ -1,0 +1,165 @@
+/* 영춘권 자세 가이드 — 모바일 세로 우선 */
+:root {
+  --bg: #151a18;
+  --bg-2: #1d2421;
+  --panel: #232b28;
+  --line: #34403b;
+  --ink: #ece7db;
+  --dim: #9aa69f;
+  --left: #2ec4b6;
+  --right: #ff9f43;
+  --gold: #ffd166;
+  --ok: #7bdc6a;
+  --warn: #ffd166;
+  --bad: #ff6b6b;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  margin: 0;
+  font-family: "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100dvh;
+  overscroll-behavior: none;
+}
+
+#app {
+  display: flex; flex-direction: column; gap: 8px;
+  max-width: 720px; margin: 0 auto;
+  padding: 8px 8px calc(12px + env(safe-area-inset-bottom));
+}
+
+header { display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px; }
+header h1 { font-size: 15px; margin: 0; letter-spacing: .02em; opacity: .92; }
+#clock { font-size: 12px; opacity: .6; font-variant-numeric: tabular-nums; }
+
+/* 3D 무대 */
+#stage {
+  position: relative; height: min(56vh, 520px); min-height: 300px;
+  border-radius: 12px; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 30%, #2b3531 0%, #1a211e 65%, #111614 100%);
+  border: 1px solid var(--line);
+}
+#figure { width: 100%; height: 100%; display: block; cursor: grab; }
+#figure:active { cursor: grabbing; }
+#labels { position: absolute; inset: 0; pointer-events: none; }
+#labels .lbl {
+  position: absolute; transform: translate(-50%, -140%);
+  font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
+  background: rgba(0,0,0,.65); color: var(--gold); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+#pose-badge {
+  position: absolute; left: 10px; top: 10px; display: flex; align-items: baseline; gap: 8px;
+  padding: 6px 10px; border-radius: 8px; background: rgba(0,0,0,.45); pointer-events: none;
+}
+#pose-badge b { font-size: 17px; }
+#pose-badge span { font-size: 12px; opacity: .7; }
+#views { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 4px; }
+#views button {
+  font-size: 11px; padding: 5px 8px; border-radius: 6px; border: 0;
+  background: rgba(0,0,0,.45); color: var(--ink);
+}
+#stage-hint { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font-size: 11px; opacity: .45; pointer-events: none; }
+#nogl:not([hidden]) { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; text-align: center; }
+[hidden] { display: none !important; }
+
+/* 회전 슬라이더 */
+#turntable { display: flex; align-items: center; gap: 8px; font-size: 12px; opacity: .85; padding: 0 4px; }
+#turntable input { flex: 1; }
+#turntable output { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* 모드 */
+#modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+#modes button {
+  padding: 9px 6px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); font-size: 13px; font-weight: 600;
+}
+#modes button.on { background: var(--left); color: #0b1f1c; border-color: var(--left); }
+
+/* 재생 조작 */
+#transport { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#transport button {
+  min-width: 40px; height: 38px; padding: 0 10px; border-radius: 9px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); font-size: 15px;
+}
+#playpause { min-width: 56px !important; background: var(--gold) !important; color: #1b1500 !important; font-weight: 700; }
+#transport select { height: 38px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 0 6px; }
+.toggle { font-size: 12px; display: inline-flex; align-items: center; gap: 4px; opacity: .85; }
+
+/* 타임라인 */
+#timeline { position: relative; padding: 6px 4px 14px; }
+#scrub { width: 100%; margin: 0; }
+#markers { position: relative; height: 10px; margin-top: 2px; }
+#markers i {
+  position: absolute; top: 0; width: 2px; height: 10px; background: var(--dim); opacity: .6;
+  transform: translateX(-1px);
+}
+#markers i.hold { width: auto; height: 6px; top: 2px; background: var(--left); opacity: .35; transform: none; }
+#markers i.on { background: var(--gold); opacity: 1; height: 12px; }
+#markers i.transition { background: var(--right); opacity: .5; height: 6px; top: 2px; transform: none; }
+
+/* 조그 휠 */
+#jog-strip {
+  height: 44px; border-radius: 10px; border: 1px dashed var(--line); background:
+    repeating-linear-gradient(90deg, transparent 0 22px, rgba(255,255,255,.06) 22px 24px);
+  display: grid; place-items: center; font-size: 12px; color: var(--dim); user-select: none;
+  touch-action: pan-y; cursor: ew-resize;
+}
+#jog-strip.active { border-color: var(--gold); color: var(--gold); }
+
+/* 자세 칩 */
+#poses { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: thin; }
+#poses button {
+  flex: 0 0 auto; padding: 7px 10px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); font-size: 12px; white-space: nowrap;
+}
+#poses button small { opacity: .55; margin-right: 4px; }
+#poses button.on { background: var(--gold); color: #1b1500; border-color: var(--gold); }
+#poses button.nodata { opacity: .4; }
+
+/* 카드 */
+#info { display: grid; gap: 8px; }
+article { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.card-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.card-head .idx { font-size: 11px; opacity: .55; }
+.card-head h2 { margin: 0; font-size: 18px; }
+.card-head .zh { font-size: 13px; opacity: .65; }
+#book { margin: 0 0 10px; }
+#book img { width: 100%; max-height: 360px; object-fit: contain; border-radius: 8px; background: #000; display: block; }
+#book figcaption { font-size: 11px; opacity: .55; margin-top: 4px; }
+#card-desc { margin: 0 0 8px; font-size: 14px; line-height: 1.5; }
+#card-cues { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; color: #cfd8d2; }
+#transition-card h3 { margin: 0 0 6px; font-size: 14px; }
+#transition-card h3 span { font-weight: 400; opacity: .7; }
+#trans-hint { margin: 0 0 6px; font-size: 13px; line-height: 1.5; color: var(--gold); }
+#trans-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
+#trans-list li.left { color: var(--left); }
+#trans-list li.right { color: var(--right); }
+
+/* 각도 표 */
+#angles h3 { margin: 4px 4px 6px; font-size: 14px; }
+#angles h3 small { font-weight: 400; opacity: .55; font-size: 11px; margin-left: 6px; }
+#angles table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+#angles th { text-align: left; font-weight: 500; opacity: .55; font-size: 11px; padding: 4px 8px; }
+#angles td { padding: 7px 8px; border-top: 1px solid var(--line); }
+#angles td:nth-child(n+2) { text-align: right; }
+#angles tr { cursor: pointer; }
+#angles tr.on td { background: rgba(255,209,102,.12); }
+#angles tr.left td:first-child { border-left: 3px solid var(--left); }
+#angles tr.right td:first-child { border-left: 3px solid var(--right); }
+#angles tr.center td:first-child { border-left: 3px solid var(--dim); }
+.d-ok { color: var(--ok); } .d-warn { color: var(--warn); } .d-bad { color: var(--bad); }
+
+footer { display: flex; justify-content: space-between; font-size: 11px; opacity: .5; padding: 6px 4px; }
+footer a { color: inherit; }
+
+button:disabled { opacity: .35; }
+
+@media (min-width: 720px) {
+  #stage { height: 520px; }
+  #info { grid-template-columns: 1fr 1fr; }
+}

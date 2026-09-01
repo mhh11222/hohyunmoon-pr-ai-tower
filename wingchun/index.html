@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#151a18">
+<title>영춘권 자세 가이드</title>
+<meta name="description" content="영춘권 기본 연속동작을 3D 인체로 재생하고, 자세마다 멈춰 각도와 전환 동작을 확인하는 학습 가이드.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23151a18'/%3E%3Ctext x='16' y='24' font-size='20' text-anchor='middle' fill='%232ec4b6'%3E詠%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="ui/style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1 id="title">영춘권 자세 가이드</h1>
+    <div id="clock">0.00s</div>
+  </header>
+
+  <section id="stage">
+    <canvas id="figure"></canvas>
+    <div id="labels"></div>
+    <div id="pose-badge"><b id="pose-name">—</b><span id="pose-zh"></span></div>
+    <div id="views">
+      <button data-view="front">정면</button>
+      <button data-view="left">왼쪽</button>
+      <button data-view="right">오른쪽</button>
+      <button data-view="top">위</button>
+      <button data-view="iso">기울여</button>
+    </div>
+    <div id="stage-hint">드래그 회전 · 두 손가락/휠 확대 · Shift+드래그 이동</div>
+    <div id="nogl" hidden>이 브라우저에서 WebGL을 쓸 수 없어 3D 인체를 그릴 수 없습니다.</div>
+  </section>
+
+  <section id="turntable">
+    <span>회전</span>
+    <input id="azimuth" type="range" min="-180" max="180" step="1" value="34">
+    <output id="azimuth-out">34°</output>
+  </section>
+
+  <section id="modes">
+    <button data-mode="play" class="on">연속 재생</button>
+    <button data-mode="pose">자세 고정</button>
+    <button data-mode="transition">전환만 보기</button>
+  </section>
+
+  <section id="transport">
+    <button id="prev" title="이전 자세">⏮</button>
+    <button id="step-back" title="한 프레임 뒤로">◀</button>
+    <button id="playpause" title="재생/멈춤">▶</button>
+    <button id="step-fwd" title="한 프레임 앞으로">▶︎|</button>
+    <button id="next" title="다음 자세">⏭</button>
+    <select id="speed" title="재생 속도">
+      <option value="0.25">0.25×</option>
+      <option value="0.5">0.5×</option>
+      <option value="1" selected>1×</option>
+      <option value="1.5">1.5×</option>
+    </select>
+    <label class="toggle"><input id="ghost" type="checkbox" checked> 전 자세 유령</label>
+    <label class="toggle"><input id="showref" type="checkbox"> 책 자세 겹치기</label>
+  </section>
+
+  <section id="timeline">
+    <input id="scrub" type="range" min="0" max="1" step="0.001" value="0">
+    <div id="markers"></div>
+  </section>
+
+  <section id="jog">
+    <div id="jog-strip" title="좌우로 끌어 프레임 단위로 넘기기"><span>◀ ◀ ◀ &nbsp; 좌우로 끌어서 한 프레임씩 &nbsp; ▶ ▶ ▶</span></div>
+  </section>
+
+  <section id="poses"></section>
+
+  <section id="info">
+    <article id="pose-card">
+      <div class="card-head">
+        <span class="idx" id="pose-idx"></span>
+        <h2 id="card-name">—</h2>
+        <span class="zh" id="card-zh"></span>
+      </div>
+      <figure id="book"><img id="book-img" alt="" hidden><figcaption id="book-cap">책 사진 없음</figcaption></figure>
+      <p id="card-desc"></p>
+      <ul id="card-cues"></ul>
+    </article>
+    <article id="transition-card">
+      <h3>다음 자세로 넘어가기 <span id="trans-title"></span></h3>
+      <p id="trans-hint"></p>
+      <ul id="trans-list"></ul>
+    </article>
+  </section>
+
+  <section id="angles">
+    <h3>관절 각도 <small>행을 누르면 3D에 표시 · 책 자세와의 차이는 색으로</small></h3>
+    <table><thead><tr><th>부위</th><th>지금</th><th>책</th><th>차이</th></tr></thead><tbody id="angle-rows"></tbody></table>
+  </section>
+
+  <footer>
+    <a href="../">← 홈</a>
+    <span id="meta"></span>
+  </footer>
+</div>
+<script type="importmap">
+{
+  "imports": {
+    "three": "../mahjong/vendor/three.module.min.js"
+  }
+}
+</script>
+<script type="module">
+  import { boot } from "./ui/app.js";
+  boot();
+</script>
+</body>
+</html>
