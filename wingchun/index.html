@@ -2,12 +2,22 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#151a18">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <title>영춘권 자세 가이드</title>
 <meta name="description" content="영춘권 기본 연속동작을 3D 인체로 재생하고, 자세마다 멈춰 각도와 전환 동작을 확인하며, 카메라로 내 자세를 실시간 대조하는 학습 가이드.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23151a18'/%3E%3Ctext x='16' y='24' font-size='20' text-anchor='middle' fill='%232ec4b6'%3E詠%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="ui/style.css">
+<link rel="modulepreload" href="ui/app.js">
+<link rel="modulepreload" href="ui/figure3d.js">
+<link rel="modulepreload" href="ui/controls.js">
+<link rel="modulepreload" href="src/angles.js">
+<link rel="modulepreload" href="src/sequence.js">
+<link rel="modulepreload" href="src/skeleton.js">
+<link rel="modulepreload" href="data/sequence.js">
+<link rel="modulepreload" href="../mahjong/vendor/three.module.min.js">
 </head>
 <body>
 <div id="app">
@@ -20,35 +30,36 @@
   <section id="stage">
     <canvas id="figure"></canvas>
     <div id="labels"></div>
-    <div id="pose-badge"><b id="pose-name">—</b><span id="pose-zh"></span></div>
+    <div id="pose-badge" aria-live="polite"><b id="pose-name">—</b><span id="pose-zh"></span></div>
     <div id="views">
-      <button data-view="front">정면</button>
-      <button data-view="left">왼쪽</button>
-      <button data-view="right">오른쪽</button>
-      <button data-view="top">위</button>
-      <button data-view="iso">기울여</button>
+      <button data-view="front" type="button">정면</button>
+      <button data-view="left" type="button">왼쪽</button>
+      <button data-view="right" type="button">오른쪽</button>
+      <button data-view="top" type="button">위</button>
+      <button data-view="iso" type="button">기울여</button>
     </div>
-    <div id="cam-pip" hidden>
+    <div id="cam-pip">
       <video id="cam-video" playsinline muted></video>
       <canvas id="cam-overlay"></canvas>
     </div>
-    <div id="cam-score" hidden><b id="score-num">–</b><span>일치도</span></div>
-    <div id="stage-hint">드래그 회전 · 두 손가락/휠 확대 · Shift+드래그 이동</div>
+    <div id="cam-score"><b id="score-num">–</b><span>일치도</span></div>
+    <div id="stage-hint" class="hint">드래그 회전 · 두 손가락/휠 확대 · Shift+드래그 이동</div>
     <div id="nogl" hidden>이 브라우저에서 WebGL을 쓸 수 없어 3D 인체를 그릴 수 없습니다.</div>
   </section>
 
   <section id="turntable">
     <span>회전</span>
-    <input id="azimuth" type="range" min="-180" max="180" step="1" value="34">
+    <input id="azimuth" type="range" min="-180" max="180" step="1" value="34" aria-label="3D 회전 각도">
     <output id="azimuth-out">34°</output>
   </section>
 
   <section id="camera">
     <div class="cam-row">
-      <button id="cam-toggle">📷 내 자세 대조</button>
-      <span id="cam-status">카메라로 내 자세를 인식해 화면의 자세와 겹쳐 비교합니다. 전신이 나오게 폰을 세워 두세요.</span>
+      <button id="cam-toggle" aria-pressed="false">📷 내 자세 대조</button>
+      <span id="cam-status" class="hint">카메라로 내 자세를 인식해 화면의 자세와 겹쳐 비교합니다. 전신이 나오게 폰을 세워 두세요.</span>
     </div>
-    <ul id="cam-tips" hidden></ul>
+    <p class="privacy hint">🔒 카메라 영상은 이 기기 안에서만 처리되고 어디로도 전송·저장되지 않습니다(외부 서버 연결 없음). 인식 프로그램(약 15MB)은 처음 켤 때 한 번 내려받습니다.</p>
+    <ul id="cam-tips"></ul>
   </section>
 </div>
 
@@ -76,12 +87,12 @@
   </section>
 
   <section id="timeline">
-    <input id="scrub" type="range" min="0" max="1" step="0.001" value="0">
+    <input id="scrub" type="range" min="0" max="1" step="0.001" value="0" aria-label="재생 위치">
     <div id="markers"></div>
   </section>
 
   <section id="jog">
-    <div id="jog-strip" title="좌우로 끌어 프레임 단위로 넘기기"><span>◀ ◀ ◀ &nbsp; 좌우로 끌어서 한 프레임씩 &nbsp; ▶ ▶ ▶</span></div>
+    <div id="jog-strip" title="좌우로 끌어 프레임 단위로 넘기기" tabindex="0" role="slider" aria-label="프레임 조그 (좌우 화살표)"><span>◀ ◀ ◀ &nbsp; 좌우로 끌어서 한 프레임씩 &nbsp; ▶ ▶ ▶</span></div>
   </section>
 
   <section id="poses"></section>
@@ -98,7 +109,7 @@
       <ul id="card-cues"></ul>
     </article>
     <article id="transition-card">
-      <h3>다음 자세로 넘어가기 <span id="trans-title"></span></h3>
+      <h3><span id="trans-head">다음 자세로 넘어가기</span> <span id="trans-title"></span></h3>
       <p id="trans-hint"></p>
       <ul id="trans-list"></ul>
     </article>
@@ -115,16 +126,6 @@
   </footer>
 </div>
 </div>
-<script type="importmap">
-{
-  "imports": {
-    "three": "../mahjong/vendor/three.module.min.js"
-  }
-}
-</script>
-<script type="module">
-  import { boot } from "./ui/app.js";
-  boot();
-</script>
+<script type="module" src="ui/boot.js"></script>
 </body>
 </html>

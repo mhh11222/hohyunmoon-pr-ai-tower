@@ -84,10 +84,12 @@ def main():
         rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
         mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=np.ascontiguousarray(rgb))
         res = landmarker.detect_for_video(mp_img, int(t * 1000))
-        rec = {"t": round(t, 3), "index": index, "lm": None, "vis": None}
+        rec = {"t": round(t, 3), "index": index, "lm": None, "vis": None, "box": None}
         if res.pose_world_landmarks:
             rec["lm"] = world_to_viewer(res.pose_world_landmarks[0])
             rec["vis"] = visibilities(res.pose_world_landmarks[0])
+            xs = [l.x for l in res.pose_landmarks[0]]; ys = [l.y for l in res.pose_landmarks[0]]
+            rec["box"] = [round(min(xs), 3), round(min(ys), 3), round(max(xs), 3), round(max(ys), 3)]  # 화면 비율 좌표
             detected += 1
             if not args.no_frames:
                 cv2.imwrite(str(work / "frames_pose" / f"{index:06d}.jpg"), draw_pose(small.copy(), res.pose_landmarks[0]))

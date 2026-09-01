@@ -87,3 +87,25 @@ describe("matchScore", () => {
     expect(r.worst.every((w) => Math.abs(w.delta) >= r.mean)).toBe(true);
   });
 });
+
+describe("겹친 관절(영벡터)", () => {
+  it("angleBetween/elevation/yaw는 null을 돌려주고 표는 NaN 없이 비교를 건너뛴다", () => {
+    const f = bodyFrame(lmOf("p01"));
+    expect(angleBetween([0, 0, 0], [1, 0, 0])).toBeNull();
+    expect(elevation([0, 0, 0], f)).toBeNull();
+    expect(yaw([0, 0, 0], f)).toBeNull();
+    const lm = lmOf("p06").map((p) => p.slice());
+    lm[J.left_wrist] = lm[J.left_elbow].slice(); // 손목이 팔꿈치 위에 겹침
+    const a = jointAngles(lm);
+    expect(a.find((x) => x.key === "l_elbow").value).toBeNull();
+    const cmp = compareAngles(a, jointAngles(lmOf("p06")));
+    expect(cmp.find((x) => x.key === "l_elbow").delta).toBeNull();
+    for (const x of cmp) if (x.delta != null) expect(Number.isFinite(x.delta)).toBe(true);
+    expect(Number.isFinite(matchScore(lm, lmOf("p06")).score)).toBe(true);
+  });
+  it("describeTransition은 동사(verb)를 따로 준다", () => {
+    const s = describeTransition(lmOf("p05"), lmOf("p06"));
+    expect(s[0].verb).toBeTruthy();
+    expect(s[0].text).toContain(s[0].verb);
+  });
+});

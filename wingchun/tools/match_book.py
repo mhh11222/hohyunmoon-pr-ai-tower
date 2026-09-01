@@ -97,6 +97,7 @@ def main():
                 "image": m.get("image") or (f"book/{img.name}" if img else None),
                 "ref": refs[i] if i < len(refs) else None,
                 "start": round(start, 3) if k else None, "end": round(end, 3) if k else None, "key": k["t"] if k else None,
+                "frameIndex": k["frameIndex"] if k else None,
                 "holdIndex": -1, "matchDistance": k["distance"] if k else None,
             })
         save_json(work / "poses.json", poses)
@@ -144,6 +145,7 @@ def main():
             "start": h["start"] if h else None,
             "end": h["end"] if h else None,
             "key": h["key"] if h else None,
+            "frameIndex": h["keyIndex"] if h else None,
             "holdIndex": mapping[i] if i < len(mapping) else -1,
         }
         if h and pose["ref"]:

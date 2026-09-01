@@ -11,9 +11,11 @@
 - 전환 카드: "왼팔꿈치 92° → 165° (73° 펴기)"처럼 무엇이 얼마나 움직이는지 자동 설명
 - 조그 휠·화살표 키로 한 프레임씩
 
-빌드 없이 정적 파일로 돕니다. 지금 `data/sequence.js`에는 책 『영춘권 기본동작(1)』 01~40번
-사진에서 인식한 자세를 보간한 데이터가 들어 있습니다(`tools/book_only.py`). 영상을 아래
-파이프라인으로 처리하면 실제 움직임 데이터로 바뀝니다. `data/demo.js`는 테스트용 손제작 예시입니다.
+빌드 없이 정적 파일로 돕니다. 지금 `data/sequence.js`에는 시범 영상(72.7초, 1324프레임)의 실제 움직임에
+책 『영춘권 기본동작(1)』 01~90번 사진·설명을 시간순으로 붙인 데이터가 들어 있습니다.
+`data/demo.js`는 테스트용 손제작 예시입니다.
+
+공개 주소: https://mhh11222.github.io/hohyunmoon-pr-ai-tower/wingchun/
 
 ## 실행
 
@@ -66,6 +68,15 @@ python3 tools/match_book.py --work work --book book --poses poses.json
 결과 `work/poses.json`을 열어 이름·구간이 맞는지 보고 필요하면 `key`/`start`/`end`를 고칩니다.
 사진에 전신이 없어 인식이 안 되면 사진 순서대로 남는 구간에 배정됩니다.
 
+### 2-1. 정렬 결과 눈으로 확인 (선택)
+
+```bash
+python3 tools/qa_sheet.py --work work        # work/qa/sheet1.jpg …
+```
+
+책 사진 크롭과 그 자세에 붙은 영상 프레임(인물 주변 확대)을 나란히 놓은 시트가 나옵니다.
+어긋난 자세는 `work/poses.json`의 `key`(초)를 고치고 3단계를 다시 돌리면 됩니다.
+
 ### 3. 뷰어 데이터 만들기
 
 ```bash
@@ -115,6 +126,8 @@ index.html          화면
 ui/app.js           상태·조작·카드·각도표
 ui/figure3d.js      three.js 인체 (관절 구 + 뼈 원기둥, 유령/기준 자세, 각도 호)
 ui/controls.js      궤도 카메라 (드래그·휠·핀치)
+ui/camera.js        카메라 실시간 자세 인식 (vendor/mediapipe 자체 호스팅)
+vendor/mediapipe/   tasks-vision 0.10.21 + pose_landmarker_lite 모델 (Apache-2.0)
 src/skeleton.js     관절 33개·뼈 연결 정의
 src/angles.js       관절 각도·몸 기준틀·전환 설명 (순수 함수)
 src/sequence.js     보간·정지 구간 분할·자세 정규화/비교·책 사진 매칭 (순수 함수)
@@ -124,6 +137,23 @@ tests/              vitest — src/ 와 데모 데이터
 ```
 
 테스트: 저장소 루트에서 `npx vitest run wingchun`.
+
+## 카메라 대조
+
+"📷 내 자세 대조"를 누르면 브라우저 안에서 MediaPipe Pose(tasks-vision 0.10.21, WASM — `vendor/mediapipe/`에
+자체 호스팅)가 돌아 내 관절을 뽑고, 화면 자세 위에 분홍 인체로 겹칩니다. 일치도(0~100)는 팔꿈치·어깨·팔뚝 기울기·무릎·고관절 각도의
+평균 차이로 계산합니다(`matchScore`). 카메라 프레임은 기기 밖으로 나가지 않습니다.
+HTTPS(또는 localhost)에서만 카메라를 열 수 있습니다.
+
+## 보안·개인정보
+
+- 서버 없는 정적 페이지. 입력 폼·계정·쿠키·분석 스크립트 없음.
+- `index.html`의 CSP: `script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self'` — 외부 출처로 스크립트를 받지도,
+  요청을 보내지도 못한다. 인라인 스크립트 금지, 리퍼러 전송 안 함. MediaPipe 라이브러리·WASM·모델은 저장소 안에 둔다.
+- 카메라 영상은 기기 안에서만 처리·표시되고 전송·저장되지 않는다(정책으로도 외부 연결이 막혀 있다).
+  인식 프로그램(약 15MB)은 페이지당 한 번 내려받고, 껐다 켜도 다시 받지 않는다.
+- 시범 영상 원본과 작업 폴더(`work/`), 모델 파일(`tools/models/`)은 git에 올라가지 않는다(.gitignore).
+- 책 사진(`book/`)은 학습용으로 잘라 넣은 것이므로 공개 범위를 넓히기 전에 저작권을 확인할 것.
 
 ## 한계
 

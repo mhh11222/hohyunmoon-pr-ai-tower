@@ -18,10 +18,13 @@ export function normalize(a) {
 export function mid(a, b) { return scale(add(a, b), 0.5); }
 export function dist(a, b) { return length(sub(a, b)); }
 
-/** 두 벡터 사이 각(도) */
+const EPS = 1e-6;
+
+/** 두 벡터 사이 각(도). 어느 한쪽이 영벡터(관절이 겹침)면 null — 그럴듯한 숫자 대신 "모름" */
 export function angleBetween(u, v) {
-  const d = dot(normalize(u), normalize(v));
-  return Math.acos(Math.max(-1, Math.min(1, d))) * RAD;
+  const lu = length(u), lv = length(v);
+  if (lu < EPS || lv < EPS) return null;
+  return Math.acos(Math.max(-1, Math.min(1, dot(u, v) / (lu * lv)))) * RAD;
 }
 
 /** 꼭짓점 b에서 a·c가 이루는 각(도). 팔꿈치·무릎 등 */
@@ -52,12 +55,14 @@ export function toBody(p, frame) {
 
 /** 벡터가 수평면과 이루는 각(도). +면 위로 향함 */
 export function elevation(v, frame) {
-  const n = normalize(v);
-  return Math.asin(Math.max(-1, Math.min(1, dot(n, frame.up)))) * RAD;
+  const l = length(v);
+  if (l < EPS) return null;
+  return Math.asin(Math.max(-1, Math.min(1, dot(v, frame.up) / l))) * RAD;
 }
 
 /** 벡터를 수평면에 투영했을 때 "앞" 방향에서 왼쪽(+)/오른쪽(-)으로 벗어난 각(도) */
 export function yaw(v, frame) {
+  if (length(v) < EPS) return null;
   const x = dot(v, frame.left);
   const z = dot(v, frame.forward);
   return Math.atan2(x, z) * RAD;
@@ -126,7 +131,7 @@ export function compareAngles(cur, ref) {
   const r = anglesByKey(ref);
   return cur.map((a) => {
     const b = r[a.key];
-    if (!b) return { ...a, ref: null, delta: null };
+    if (!b || a.value == null || b.value == null) return { ...a, ref: b?.value ?? null, delta: null };
     let delta = a.value - b.value;
     if (a.kind === "yaw") delta = ((delta + 540) % 360) - 180;
     return { ...a, ref: b.value, delta };
@@ -140,8 +145,13 @@ export const SCORE_KEYS = ["l_elbow", "r_elbow", "l_shoulder", "r_shoulder", "l_
  * 내 자세가 목표 자세와 얼마나 맞는지 0~100.
  * 평균 각도 차이 0° = 100, fullOff(기본 40°) 이상 = 0. 함께 가장 크게 벗어난 항목도 돌려준다.
  */
-export function matchScore(userLm, targetLm, { keys = SCORE_KEYS, fullOff = 40 } = {}) {
-  const diffs = compareAngles(jointAngles(userLm), jointAngles(targetLm)).filter((a) => keys.includes(a.key) && a.delta !== null);
+export function matchScore(userLm, targetLm, opts) {
+  return scoreFromDiff(compareAngles(jointAngles(userLm), jointAngles(targetLm)), opts);
+}
+
+/** compareAngles 결과로 일치도 계산 (각도 목록을 이미 갖고 있을 때) */
+export function scoreFromDiff(diff, { keys = SCORE_KEYS, fullOff = 40 } = {}) {
+  const diffs = diff.filter((a) => keys.includes(a.key) && a.delta !== null);
   if (!diffs.length) return { score: 0, mean: null, worst: [] };
   const mean = diffs.reduce((s, a) => s + Math.abs(a.delta), 0) / diffs.length;
   const score = Math.round(Math.max(0, Math.min(100, 100 * (1 - mean / fullOff))));
@@ -149,8 +159,9 @@ export function matchScore(userLm, targetLm, { keys = SCORE_KEYS, fullOff = 40 }
   return { score, mean, worst };
 }
 
-function fmt(v, unit) {
-  return `${Math.round(v)}${unit}`;
+/** 각도 표시 문자열. null/NaN은 "–" */
+export function fmt(v, unit) {
+  return v == null || !Number.isFinite(v) ? "–" : `${Math.round(v)}${unit}`;
 }
 
 const VERB = {
@@ -165,8 +176,13 @@ const VERB = {
  * 전 자세 → 다음 자세로 갈 때 무엇이 얼마나 움직이는지 한국어 문장으로.
  * threshold 이하의 변화는 "거의 그대로"로 취급해 뺀다.
  */
-export function describeTransition(fromLm, toLm, { threshold = 8, limit = 6 } = {}) {
-  const diffs = compareAngles(jointAngles(toLm), jointAngles(fromLm))
+export function describeTransition(fromLm, toLm, opts) {
+  return describeDiff(jointAngles(fromLm), jointAngles(toLm), opts);
+}
+
+/** describeTransition과 같되 각도 목록을 받는다 (한 틱에 jointAngles를 한 번만 돌리려고) */
+export function describeDiff(fromAngles, toAngles, { threshold = 8, limit = 6 } = {}) {
+  const diffs = compareAngles(toAngles, fromAngles)
     .filter((a) => a.delta !== null && Math.abs(a.delta) >= threshold)
     .sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta))
     .slice(0, limit);
@@ -177,6 +193,7 @@ export function describeTransition(fromLm, toLm, { threshold = 8, limit = 6 } = 
     to: a.value,
     delta: a.delta,
     unit: a.unit,
+    verb: VERB[a.kind](a.delta),
     text: `${a.label} ${fmt(a.ref, a.unit)} → ${fmt(a.value, a.unit)} (${fmt(Math.abs(a.delta), a.unit)} ${VERB[a.kind](a.delta)})`,
   }));
 }

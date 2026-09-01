@@ -22,7 +22,9 @@ export class Orbit {
 
   _bind() {
     const d = this.dom;
-    d.style.touchAction = "none";
+    // 세로 스크롤은 브라우저에 맡긴다(pan-y): 3D 위에서 위아래로 쓸어도 페이지가 넘어간다.
+    // 한 손가락 좌우 = 회전, 두 손가락 = 확대·이동.
+    d.style.touchAction = "pan-y";
     d.addEventListener("pointerdown", (e) => {
       d.setPointerCapture(e.pointerId);
       this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button });
@@ -112,12 +114,6 @@ export class Orbit {
     if (d > 180) d -= 360;
     if (d < -180) d += 360;
     return d;
-  }
-
-  reset({ target = [0, 0, 0], distance = 3 } = {}) {
-    this.target = target.slice();
-    this.distance = distance;
-    this.setView("iso");
   }
 
   update() {

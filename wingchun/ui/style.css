@@ -40,7 +40,7 @@ header h1 { font-size: 15px; margin: 0; letter-spacing: .02em; opacity: .92; }
 
 /* 3D 무대 */
 #stage {
-  position: relative; height: min(56vh, 520px); min-height: 300px;
+  position: relative; height: min(48vh, 520px); min-height: 280px;
   border-radius: 12px; overflow: hidden;
   background: radial-gradient(ellipse at 50% 30%, #2b3531 0%, #1a211e 65%, #111614 100%);
   border: 1px solid var(--line);
@@ -62,16 +62,16 @@ header h1 { font-size: 15px; margin: 0; letter-spacing: .02em; opacity: .92; }
 #pose-badge span { font-size: 12px; opacity: .7; }
 #views { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 4px; }
 #views button {
-  font-size: 11px; padding: 5px 8px; border-radius: 6px; border: 0;
-  background: rgba(0,0,0,.45); color: var(--ink);
+  font-size: 12px; min-height: 32px; min-width: 52px; padding: 6px 10px; border-radius: 6px; border: 0;
+  background: rgba(0,0,0,.5); color: var(--ink);
 }
-#stage-hint { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font-size: 11px; opacity: .45; pointer-events: none; }
+#stage-hint { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font-size: 12px; color: #c9d2cc; opacity: .8; text-shadow: 0 1px 2px #000; pointer-events: none; }
 #nogl:not([hidden]) { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; text-align: center; }
 [hidden] { display: none !important; }
 
 /* 회전 슬라이더 */
 #turntable { display: flex; align-items: center; gap: 8px; font-size: 12px; opacity: .85; padding: 0 4px; }
-#turntable input { flex: 1; }
+#turntable input { flex: 1; height: 28px; }
 #turntable output { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* 모드 */
@@ -90,11 +90,12 @@ header h1 { font-size: 15px; margin: 0; letter-spacing: .02em; opacity: .92; }
 }
 #playpause { min-width: 56px !important; background: var(--gold) !important; color: #1b1500 !important; font-weight: 700; }
 #transport select { height: 38px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 0 6px; }
-.toggle { font-size: 12px; display: inline-flex; align-items: center; gap: 4px; opacity: .85; }
+.toggle { font-size: 13px; display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 4px; opacity: .9; }
+.toggle input { width: 18px; height: 18px; }
 
 /* 타임라인 */
 #timeline { position: relative; padding: 6px 4px 14px; }
-#scrub { width: 100%; margin: 0; }
+#scrub { width: 100%; margin: 0; height: 28px; }
 #markers { position: relative; height: 10px; margin-top: 2px; }
 #markers i {
   position: absolute; top: 0; width: 2px; height: 10px; background: var(--dim); opacity: .6;
@@ -116,10 +117,10 @@ header h1 { font-size: 15px; margin: 0; letter-spacing: .02em; opacity: .92; }
 /* 자세 칩 */
 #poses { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: thin; }
 #poses button {
-  flex: 0 0 auto; padding: 7px 10px; border-radius: 999px; border: 1px solid var(--line);
-  background: var(--panel); color: var(--ink); font-size: 12px; white-space: nowrap;
+  flex: 0 0 auto; min-height: 40px; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); font-size: 13px; white-space: nowrap;
 }
-#poses button small { opacity: .55; margin-right: 4px; }
+#poses button small { opacity: .6; margin-right: 5px; font-size: 12px; }
 #poses button.on { background: var(--gold); color: #1b1500; border-color: var(--gold); }
 #poses button.nodata { opacity: .4; }
 
@@ -130,8 +131,8 @@ article { background: var(--panel); border: 1px solid var(--line); border-radius
 .card-head .idx { font-size: 11px; opacity: .55; }
 .card-head h2 { margin: 0; font-size: 18px; }
 .card-head .zh { font-size: 13px; opacity: .65; }
-#book { margin: 0 0 10px; }
-#book img { width: 100%; max-height: 360px; object-fit: contain; border-radius: 8px; background: #000; display: block; }
+#book { margin: 0 0 10px; min-height: 120px; }
+#book img { width: auto; max-width: 100%; max-height: 360px; margin: 0 auto; border-radius: 8px; display: block; }
 #book figcaption { font-size: 11px; opacity: .55; margin-top: 4px; }
 #card-desc { margin: 0 0 8px; font-size: 14px; line-height: 1.5; }
 #card-cues { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; color: #cfd8d2; }
@@ -139,6 +140,8 @@ article { background: var(--panel); border: 1px solid var(--line); border-radius
 #transition-card h3 span { font-weight: 400; opacity: .7; }
 #trans-hint { margin: 0 0 6px; font-size: 13px; line-height: 1.5; color: var(--gold); }
 #trans-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
+#trans-list li { cursor: pointer; padding: 3px 0; }
+#trans-list li:focus-visible, #angles tr:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
 #trans-list li.left { color: var(--left); }
 #trans-list li.right { color: var(--right); }
 
@@ -172,27 +175,36 @@ button:disabled { opacity: .35; }
   padding: 6px 12px; border-radius: 10px; background: rgba(0,0,0,.55); border: 1px solid var(--user); pointer-events: none;
 }
 #cam-score b { font-size: 22px; color: var(--user); font-variant-numeric: tabular-nums; }
-#cam-score span { font-size: 10px; opacity: .7; }
+#cam-score span { font-size: 12px; opacity: .8; }
 #camera { display: grid; gap: 6px; }
-.cam-row { display: flex; align-items: center; gap: 10px; }
+.cam-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; }
 #cam-toggle {
   flex: 0 0 auto; padding: 9px 14px; border-radius: 10px; border: 1px solid var(--user);
   background: transparent; color: var(--ink); font-size: 13px; font-weight: 600;
 }
 #cam-toggle.on { background: var(--user); color: #2a0022; }
-#cam-status { font-size: 12px; opacity: .7; line-height: 1.4; }
+#cam-status { font-size: 12px; opacity: .7; line-height: 1.4; flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+#camera .privacy { margin: 0; font-size: 11px; opacity: .55; line-height: 1.4; }
 #cam-tips { margin: 0; padding: 8px 8px 8px 24px; border-radius: 10px; background: rgba(255,79,216,.1); font-size: 13px; line-height: 1.6; }
 #cam-tips li.ok { list-style: "✓ "; color: var(--ok); }
 .table-wrap { overflow-x: auto; }
 th.me, td.me { display: none; color: var(--user); }
 body.cam-on th.me, body.cam-on td.me { display: table-cell; }
+/* 카메라 켜짐 표시는 body.cam-on 하나로 */
+body:not(.cam-on) #cam-pip, body:not(.cam-on) #cam-score, body:not(.cam-on) #cam-tips { display: none; }
 
 /* 가로 화면(폰 가로·태블릿·PC): 왼쪽에 3D를 고정, 오른쪽을 스크롤 */
 @media (orientation: landscape) and (min-width: 700px) {
   #app { max-width: none; display: grid; grid-template-columns: minmax(340px, 46%) 1fr; gap: 12px; align-items: start; padding: 8px 12px; }
-  #col-stage { position: sticky; top: 8px; display: flex; flex-direction: column; gap: 8px; height: calc(100dvh - 16px); }
-  #stage { flex: 1 1 auto; height: auto; min-height: 260px; }
+  #col-stage { position: sticky; top: 8px; display: flex; flex-direction: column; gap: 8px; height: calc(100dvh - 16px); overflow-y: auto; scrollbar-width: thin; }
+  #stage { flex: 1 1 auto; height: auto; min-height: 220px; }
   #col-panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+}
+/* 낮은 가로 화면(폰 가로): 시점 버튼을 아래 한 줄로, 카메라 안내는 접기 */
+@media (orientation: landscape) and (max-height: 500px) {
+  #views { top: auto; bottom: 6px; left: 8px; right: 8px; flex-direction: row; justify-content: center; }
+  #stage-hint { display: none; }
+  .hint { display: none; }
 }
 @media (orientation: landscape) and (min-width: 1100px) {
   #info { grid-template-columns: 1fr 1fr; }
