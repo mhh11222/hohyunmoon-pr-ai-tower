@@ -267,6 +267,46 @@ def assign_refs_to_holds(ref_lms: list, hold_lms: list) -> list[int]:
     return out
 
 
+def align_refs_to_frames(ref_lms: list, frames: list[dict], min_gap: int = 4, speed_weight: float = 0.2,
+                         joints=MOTION_JOINTS) -> list[dict]:
+    """책 자세들을 영상 '모든 프레임'에 시간순으로 정렬한다 (정지 구간이 거의 없는 영상용).
+
+    단조 DP: ref i 는 ref i-1 보다 min_gap 프레임 이상 뒤의 프레임에 붙는다.
+    비용 = 자세 거리 + speed_weight × 그 프레임의 움직임 속도 (멈춘 순간을 선호).
+    반환: ref마다 {"frameIndex", "t", "distance"}.
+    """
+    n, m = len(ref_lms), len(frames)
+    if n == 0 or m == 0:
+        return []
+    fr = np.stack([normalize_pose(f["lm"])[joints] for f in frames])          # (m, k, 3)
+    sp = moving_avg(speeds(frames), 2)
+    cost = np.empty((n, m))
+    for i, r in enumerate(ref_lms):
+        nr = normalize_pose(r)[joints]
+        cost[i] = np.linalg.norm(fr - nr, axis=2).mean(axis=1) + speed_weight * sp
+    INF = 1e18
+    dp = np.full((n, m), INF)
+    arg = np.full((n, m), -1, dtype=int)
+    dp[0] = cost[0]
+    for i in range(1, n):
+        # prefix-min of dp[i-1] up to f - min_gap
+        best = np.full(m, INF); best_idx = np.full(m, -1, dtype=int)
+        run_v, run_i = INF, -1
+        for f in range(m):
+            g = f - min_gap
+            if g >= 0 and dp[i - 1][g] < run_v:
+                run_v, run_i = dp[i - 1][g], g
+            best[f], best_idx[f] = run_v, run_i
+        dp[i] = cost[i] + best
+        arg[i] = best_idx
+    f = int(np.argmin(dp[n - 1]))
+    out = [None] * n
+    for i in range(n - 1, -1, -1):
+        out[i] = {"frameIndex": f, "t": frames[f]["t"], "distance": round(float(cost[i][f] - speed_weight * sp[f]), 3)}
+        f = int(arg[i][f]) if i > 0 else f
+    return out
+
+
 # ---------- 출력 ----------
 
 def write_sequence_js(path: Path, seq: dict):

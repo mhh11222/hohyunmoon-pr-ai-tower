@@ -16,8 +16,8 @@ import argparse
 from pathlib import Path
 
 from pose_common import (
-    assign_refs_to_holds, ensure_model, load_json, log, make_landmarker, pose_distance, save_json,
-    world_to_viewer,
+    align_refs_to_frames, assign_refs_to_holds, ensure_model, load_json, log, make_landmarker, pose_distance,
+    save_json, world_to_viewer,
 )
 
 IMG_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
@@ -40,6 +40,9 @@ def main():
     ap.add_argument("--poses", default=None, help="자세 이름/설명 JSON (배열)")
     ap.add_argument("--model", default=None)
     ap.add_argument("--no-match", action="store_true", help="자세 유사도 매칭 없이 사진 순서 = 정지 구간 순서로 붙임")
+    ap.add_argument("--dtw", action="store_true", help="정지 구간 대신 전체 프레임 시간순 정렬을 강제")
+    ap.add_argument("--min-gap", type=float, default=0.3, help="시간순 정렬에서 자세 사이 최소 간격(초)")
+    ap.add_argument("--half", type=float, default=0.2, help="시간순 정렬에서 자세 창 반폭(초)")
     args = ap.parse_args()
 
     work = Path(args.work)
@@ -66,6 +69,43 @@ def main():
 
     n = max(len(meta), len(images), len(holds) if not (meta or images) else 0)
     hold_lms = [frames[h["keyIndex"]]["lm"] for h in holds]
+
+    good = [i for i, r in enumerate(refs) if r is not None]
+    fps = landmarks.get("fps") or 15
+    # 영상이 쉬지 않고 이어져 정지 구간이 사진 수보다 훨씬 적으면: 전체 프레임에 시간순 정렬(DTW)
+    if images and not args.no_match and good and (args.dtw or len(holds) < 0.7 * len(good)):
+        log(f"[align] 정지 구간({len(holds)})이 사진({len(good)})보다 적어 전체 프레임 시간순 정렬을 씁니다")
+        aligned = align_refs_to_frames([refs[i] for i in good], frames, min_gap=max(2, int(args.min_gap * fps)))
+        keys = {}
+        for k, i in enumerate(good):
+            keys[i] = aligned[k]
+        # 창(window): 대표 프레임 ± half, 이웃 대표와의 중간을 넘지 않게
+        ts = [keys[i]["t"] for i in sorted(keys)]
+        poses = []
+        for i in range(n):
+            m = meta[i] if i < len(meta) else {}
+            img = images[i] if i < len(images) else None
+            k = keys.get(i)
+            if k:
+                j = sorted(keys).index(i)
+                lo = (ts[j - 1] + ts[j]) / 2 if j > 0 else 0.0
+                hi = (ts[j] + ts[j + 1]) / 2 if j + 1 < len(ts) else frames[-1]["t"]
+                start = max(lo, k["t"] - args.half); end = min(hi, k["t"] + args.half)
+            poses.append({
+                "id": m.get("id") or f"p{i + 1:02d}", "name": m.get("name") or f"자세 {i + 1}", "zh": m.get("zh", ""),
+                "desc": m.get("desc", ""), "cues": m.get("cues", []), "transition": m.get("transition", ""),
+                "image": m.get("image") or (f"book/{img.name}" if img else None),
+                "ref": refs[i] if i < len(refs) else None,
+                "start": round(start, 3) if k else None, "end": round(end, 3) if k else None, "key": k["t"] if k else None,
+                "holdIndex": -1, "matchDistance": k["distance"] if k else None,
+            })
+        save_json(work / "poses.json", poses)
+        log("[align] 자세 ↔ 영상 시각:")
+        for p in poses:
+            log(f"   {p['id']} {p['name']:<14} {p['key'] if p['key'] is not None else '—':>6}s  거리 {p['matchDistance']}")
+        log(f"[done] {work / 'poses.json'}")
+        log("다음: python3 tools/build_sequence.py --work work --out data/sequence.js --title '...'")
+        return
 
     # 책 사진 → 정지 구간 배정
     if images and not args.no_match and any(r is not None for r in refs):
