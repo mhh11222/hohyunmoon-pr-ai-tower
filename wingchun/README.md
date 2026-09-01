@@ -11,8 +11,9 @@
 - 전환 카드: "왼팔꿈치 92° → 165° (73° 펴기)"처럼 무엇이 얼마나 움직이는지 자동 설명
 - 조그 휠·화살표 키로 한 프레임씩
 
-빌드 없이 정적 파일로 돕니다. 지금은 손으로 만든 **데모 데이터**(소념두 1단 앞부분)가 들어 있고,
-아래 파이프라인을 돌리면 본인 영상 데이터로 바뀝니다.
+빌드 없이 정적 파일로 돕니다. 지금 `data/sequence.js`에는 책 『영춘권 기본동작(1)』 01~40번
+사진에서 인식한 자세를 보간한 데이터가 들어 있습니다(`tools/book_only.py`). 영상을 아래
+파이프라인으로 처리하면 실제 움직임 데이터로 바뀝니다. `data/demo.js`는 테스트용 손제작 예시입니다.
 
 ## 실행
 
@@ -70,10 +71,20 @@ python3 tools/build_sequence.py --work work --out data/sequence.js --title "소�
 
 `data/sequence.js`가 교체되고 책 사진이 `book/`으로 복사됩니다. 브라우저를 새로고침하면 끝.
 
-### 데모 데이터로 되돌리기
+### 영상 없이 책 사진만으로 먼저 보기
 
 ```bash
-python3 tools/make_demo.py
+python3 tools/book_only.py --poses poses.json --book book --out data/sequence.js --title "영춘권 기본동작(1)"
+```
+
+사진마다 자세를 인식하고 자세 사이를 보간해 연속동작처럼 만듭니다. 이름·사진·각도 확인용이며
+전환 동작은 실제 움직임이 아니라 직선 보간입니다.
+
+### 데모 데이터
+
+```bash
+python3 tools/make_demo.py                       # data/demo.js (테스트용)
+python3 tools/make_demo.py --out data/sequence.js  # 뷰어에서 데모 보기
 ```
 
 ## 데이터 형식 (`data/sequence.js`)

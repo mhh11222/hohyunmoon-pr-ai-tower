@@ -2,7 +2,8 @@
 """데모 데이터 생성 — 실제 영상을 처리하기 전에 뷰어가 돌아가도록 소념두(小念頭) 1단 앞부분을
 손으로 만든 핵심 자세 사이를 보간해 만든다. 파이프라인 출력과 같은 형식.
 
-  python3 tools/make_demo.py --out data/sequence.js
+  python3 tools/make_demo.py                         # → data/demo.js (테스트용)
+  python3 tools/make_demo.py --out data/sequence.js  # 뷰어에서 데모 보기
 """
 from __future__ import annotations
 
@@ -155,7 +156,7 @@ def ease(k):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=str(Path(__file__).resolve().parent.parent / "data" / "sequence.js"))
+    ap.add_argument("--out", default=str(Path(__file__).resolve().parent.parent / "data" / "demo.js"))
     args = ap.parse_args()
 
     key_poses = [pose(s, l, r) for (_, _, _, s, l, r, *_rest) in KEYS]
@@ -184,7 +185,7 @@ def main():
                 t += dt
 
     seq = {
-        "title": "소념두 (小念頭) 1단 — 데모",
+        "title": "소념두 (小念頭) 1단 — 데모 (손으로 만든 예시)",
         "subtitle": "예시 데이터입니다. 본인 영상과 책 사진으로 tools/ 파이프라인을 돌리면 이 파일이 교체됩니다.",
         "fps": FPS,
         "generated": "demo",

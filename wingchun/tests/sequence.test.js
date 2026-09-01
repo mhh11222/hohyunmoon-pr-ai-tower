@@ -4,7 +4,7 @@ import {
   alignToPose, assignRefsToHolds, validateSequence, autoPoses,
 } from "../src/sequence.js";
 import { J } from "../src/skeleton.js";
-import { sequence } from "../data/sequence.js";
+import { sequence } from "../data/demo.js";
 
 describe("데모 데이터", () => {
   it("무결성 검사를 통과한다", () => {
