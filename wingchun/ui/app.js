@@ -98,11 +98,22 @@ export async function boot() {
     renderPoseCards();
   }
 
-  /** 구간 밖으로 나간 시각을 되돌린다. loop면 처음으로 감기(연속 재생), 아니면 양끝에서 멈춤 */
-  function wrap(t, loop = st.mode === "play") {
+  /**
+   * 구간 밖으로 나간 시각을 되돌린다. loop면 처음으로 감기(재생 중), 아니면 양끝에서 멈춤(프레임 스텝).
+   * 전환 모드는 구간이 짧아(0.2~2초) 끝에서 잠깐(HOLD초) 멈췄다가 처음으로 돌아간다.
+   */
+  const HOLD = 0.6;
+  let holdUntil = 0;
+  function wrap(t, loop = st.playing) {
     const [a, b] = st.range;
     if (b <= a) return a;
-    if (t > b) return loop ? a + ((t - a) % (b - a)) : b;
+    if (t > b) {
+      if (!loop) return b;
+      if (st.mode === "play") return a + ((t - a) % (b - a));
+      if (!holdUntil) { holdUntil = performance.now() + HOLD * 1000; return b; }
+      if (performance.now() < holdUntil) return b;
+      holdUntil = 0; return a;
+    }
     return t < a ? a : t;
   }
 
@@ -325,10 +336,16 @@ export async function boot() {
   // ---------- 조작 ----------
   document.querySelectorAll("#modes button").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
   document.querySelectorAll("#views button").forEach((b) => b.addEventListener("click", () => figure?.setView(b.dataset.view)));
-  $("playpause").addEventListener("click", () => { if (st.mode === "pose") setMode("transition"); else { st.playing = !st.playing; syncPlayButton(); } });
+  $("playpause").addEventListener("click", () => {
+    if (st.mode === "pose") { setMode("transition"); return; }
+    st.playing = !st.playing;
+    if (st.playing && st.t >= st.range[1] - 1e-6) st.t = st.range[0];   // 끝에서 재생 → 처음부터
+    holdUntil = 0;
+    syncPlayButton();
+  });
   $("prev").addEventListener("click", () => { if (st.mode === "play") st.mode = "pose"; setMode("pose"); setPose(st.poseIdx - 1); });
   $("next").addEventListener("click", () => { if (st.mode === "play") st.mode = "pose"; setMode("pose"); setPose(st.poseIdx + 1); });
-  const step = (n) => { st.playing = false; syncPlayButton(); st.t = wrap(st.t + n * frameDt, false); };
+  const step = (n) => { st.playing = false; holdUntil = 0; syncPlayButton(); st.t = wrap(st.t + n * frameDt, false); };
   $("step-back").addEventListener("click", () => step(-1));
   $("step-fwd").addEventListener("click", () => step(1));
   $("speed").addEventListener("change", (e) => { st.speed = Number(e.target.value); });
@@ -376,7 +393,10 @@ export async function boot() {
   let lastKey = null, last = performance.now(), tableAt = 0, scoreAt = 0;
   function tick(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
-    if (st.playing) st.t = wrap(st.t + dt * st.speed);
+    // 전환 모드: 구간이 1초보다 짧으면 그만큼 느리게 틀어 최소 1초는 보이게 한다
+    const span = st.range[1] - st.range[0];
+    const eff = st.mode === "transition" && span < 1 ? st.speed * Math.max(span, 0.15) : st.speed;
+    if (st.playing) st.t = wrap(st.t + dt * eff, true);
     if (st.mode === "play" && hasPoses) {
       const i = poseIndexAt(timedSeq, st.t);
       if (i >= 0 && i !== st.poseIdx) { st.poseIdx = i; renderPoseCards(); }
