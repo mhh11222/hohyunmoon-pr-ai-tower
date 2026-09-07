@@ -2,6 +2,7 @@
 // 유령(전 자세)·기준(책 자세)을 반투명으로 겹칠 수 있고, 선택한 각도는 호(arc)로 그린다.
 import { BONES, J, sideOf } from "../src/skeleton.js";
 import { Orbit } from "./controls.js";
+import { loadMannequin } from "./mannequin.js";
 
 const COLORS = {
   left: 0x2ec4b6,
@@ -175,6 +176,15 @@ export async function createFigure(canvas, { coarse = false } = {}) {
   }
 
   const main = buildBody();
+  // 실제 인체 비율의 마네킹은 비동기로 불러와 준비되면 막대 인형과 바꿔 끼운다 (실패하면 막대 인형 유지)
+  let mannequin = null;
+  loadMannequin(THREE, "vendor/models/Xbot.glb").then((mq) => {
+    mannequin = mq;
+    scene.add(mq.group);
+    main.group.visible = false;
+    if (currentLm) mq.setPose(currentLm);
+    needsRender = true;
+  }).catch((e) => console.warn("마네킹을 불러오지 못해 막대 인형으로 표시합니다:", e));
   const ghost = buildBody({ opacity: 0.28, tint: COLORS.ghost, castShadow: false });
   const ref = buildBody({ opacity: 0.45, tint: COLORS.ref, castShadow: false });
   const user = buildBody({ opacity: 0.6, tint: COLORS.user, castShadow: false });
@@ -263,7 +273,7 @@ export async function createFigure(canvas, { coarse = false } = {}) {
     /** 시점이 바뀔 때 알림 (orbit.onChange는 내부에서 쓰므로 여기로) */
     set onOrbitChange(fn) { onOrbitChange = fn; },
     get needsRender() { return needsRender; },
-    setPose(lm) { currentLm = lm; poseBody(main, lm); updateHighlight(); },
+    setPose(lm) { currentLm = lm; if (mannequin) mannequin.setPose(lm); else poseBody(main, lm); updateHighlight(); },
     setGhost(lm) { ghost.group.visible = !!lm; if (lm) poseBody(ghost, lm); },
     setRef(lm) { ref.group.visible = !!lm; if (lm) poseBody(ref, lm); },
     /** 카메라로 인식한 내 자세 (분홍, 반투명) */
@@ -277,6 +287,6 @@ export async function createFigure(canvas, { coarse = false } = {}) {
       return { x: ((proj.x + 1) / 2) * canvas.clientWidth, y: ((1 - proj.y) / 2) * canvas.clientHeight };
     },
     render() { needsRender = false; resize(); ring.quaternion.copy(camera.quaternion); renderer.render(scene, camera); },
-    dispose() { ro.disconnect(); renderer.dispose(); },
+    dispose() { ro.disconnect(); mannequin?.dispose(); renderer.dispose(); },
   };
 }
